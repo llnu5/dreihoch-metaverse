@@ -71,7 +71,7 @@ const topbar = document.getElementById('topbar');
 const btnBm = document.createElement('button');
 btnBm.className = 'btn';
 btnBm.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4-7 4V4.5a1 1 0 0 1 1-1z"/></svg><span>Bookmarks</span>`;
-btnBm.title = 'Gespeicherte Ansichten';
+btnBm.dataset.tip = 'Bookmarks'; btnBm.setAttribute('aria-label', 'Bookmarks');
 topbar.appendChild(btnBm);
 
 const panel = document.createElement('div');

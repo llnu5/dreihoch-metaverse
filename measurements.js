@@ -42,7 +42,7 @@ const topbar = document.getElementById('topbar');
 const btnMeasure = document.createElement('button');
 btnMeasure.className = 'btn';
 btnMeasure.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8" width="19" height="8" rx="1.6"/><path d="M7 8v3M11 8v4.2M15 8v3M19 8v4.2"/></svg><span>Messen</span>`;
-btnMeasure.title = 'Strecke im Modell messen';
+btnMeasure.dataset.tip = 'Messen'; btnMeasure.setAttribute('aria-label', 'Strecke messen');
 topbar.appendChild(btnMeasure);
 
 const labelsEl = document.createElement('div');

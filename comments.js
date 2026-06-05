@@ -195,10 +195,10 @@ document.head.appendChild(css);
 const topbar = document.getElementById('topbar');
 const btnAdd = el('button', 'btn');
 btnAdd.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.7-6.5-10.5A6.5 6.5 0 0 1 18.5 10.5C18.5 15.3 12 21 12 21z"/><circle cx="12" cy="10.2" r="2.4"/></svg><span>Kommentar</span>`;
-btnAdd.title = 'Kommentar im Modell setzen';
+btnAdd.dataset.tip = 'Kommentar'; btnAdd.setAttribute('aria-label', 'Kommentar setzen');
 const btnList = el('button', 'btn');
 btnList.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Liste</span>`;
-btnList.title = 'Kommentarliste';
+btnList.dataset.tip = 'Liste'; btnList.setAttribute('aria-label', 'Kommentarliste');
 const sep = el('div', 'sep');
 topbar.append(sep, btnAdd, btnList);
 

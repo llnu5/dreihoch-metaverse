@@ -66,7 +66,7 @@ const topbar = document.getElementById('topbar');
 const btnChat = document.createElement('button');
 btnChat.className = 'btn';
 btnChat.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg><span>Chat</span>`;
-btnChat.title = 'Chat öffnen';
+btnChat.dataset.tip = 'Chat'; btnChat.setAttribute('aria-label', 'Chat');
 topbar.appendChild(btnChat);
 
 const panel = document.createElement('div');
