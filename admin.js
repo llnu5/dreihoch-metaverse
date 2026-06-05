@@ -59,20 +59,63 @@ async function rhinoModule() {
   if (!_rhino) { const m = await import('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/rhino3dm.module.js'); _rhino = await m.default(); }
   return _rhino;
 }
-async function detect2DScan(file) {
-  try {
-    const rhino = await rhinoModule();
-    const doc = rhino.File3dm.fromByteArray(new Uint8Array(await file.arrayBuffer()));
-    if (!doc) return false;
-    const layers = doc.layers(); let found = false;
-    for (let i = 0; i < layers.count(); i++) {
-      const l = layers.get(i);
-      if ((l.name || '').trim().toLowerCase() === '3d_scan') found = true;
-      l.delete && l.delete();
+// Rhino verarbeiten: Layer "3D_Scan" erkennen UND Block-Instanzen (z. B.
+// VisualARQ-Stützen) rekursiv in Solids auflösen, damit der 3DMLoader sie zeigt.
+async function processRhino(file) {
+  const rhino = await rhinoModule();
+  const doc = rhino.File3dm.fromByteArray(new Uint8Array(await file.arrayBuffer()));
+  if (!doc) return { has3dScan: false, bytes: null, added: 0 };
+
+  // 3D_Scan-Layer?  (count ist eine Property, keine Funktion!)
+  const layers = doc.layers(); let has3dScan = false;
+  for (let i = 0; i < layers.count; i++) {
+    const l = layers.get(i);
+    if ((l.name || '').trim().toLowerCase() === '3d_scan') has3dScan = true;
+  }
+
+  let added = 0;
+  try { added = explodeInstances(rhino, doc); }
+  catch (e) { console.warn('[admin] Block-Auflösen fehlgeschlagen', e); }
+
+  const bytes = doc.toByteArray();
+  return { has3dScan, bytes, added };
+}
+
+// Alle Instanz-Referenzen rekursiv auflösen: Definitions-Geometrie (Solids) an
+// die Instanz-Transformation gesetzt der Objekttabelle hinzufügen.
+function explodeInstances(rhino, doc) {
+  const objs = doc.objects(), idefs = doc.instanceDefinitions();
+  const N = objs.count;
+  const idefById = {};
+  for (let i = 0; i < idefs.count; i++) { const d = idefs.get(i); idefById[d.id] = d.getObjectIds ? d.getObjectIds() : []; }
+  const idxById = {};
+  for (let i = 0; i < N; i++) { const o = objs.get(i); if (o) idxById[o.attributes().id] = i; }
+  let added = 0;
+
+  function addSolid(mg, layerIndex, xforms) {
+    for (let k = xforms.length - 1; k >= 0; k--) { try { mg.transform(xforms[k]); } catch (e) { return; } }
+    const a = new rhino.ObjectAttributes(); a.layerIndex = layerIndex;
+    const t = mg.constructor.name;
+    if (t.includes('Extrusion')) { if (!objs.addExtrusion(mg, a)) { try { const b = mg.toBrep(true); if (b) objs.addBrep(b, a); } catch (e) { return; } } added++; }
+    else if (t.includes('Brep')) { objs.addBrep(mg, a); added++; }
+    else if (t.includes('Mesh')) { objs.addMesh(mg, a); added++; }
+  }
+  function ex(defId, layerIndex, xforms, depth) {
+    if (depth > 6) return;
+    for (const mid of (idefById[defId] || [])) {
+      const idx = idxById[mid]; if (idx == null) continue;
+      const s = objs.get(idx); if (!s) continue;
+      const g = s.geometry(); if (!g) continue;
+      if (g.constructor.name === 'InstanceReference') ex(g.parentIdefId, layerIndex, [...xforms, g.xform], depth + 1);
+      else addSolid(g, layerIndex, xforms);
     }
-    doc.delete && doc.delete();
-    return found;
-  } catch (e) { console.warn('[admin] Rhino-Layer-Check fehlgeschlagen', e); return false; }
+  }
+  for (let i = 0; i < N; i++) {
+    const o = objs.get(i); if (!o) continue;
+    const g = o.geometry(); if (!g || g.constructor.name !== 'InstanceReference') continue;
+    ex(g.parentIdefId, o.attributes().layerIndex, [g.xform], 1);
+  }
+  return added;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,14 +131,21 @@ $('upload-btn').addEventListener('click', async () => {
   $('upload-btn').disabled = true;
 
   let has2d = false;
-  if (type === 'rhino') { setStatus('Prüfe Rhino-Layer …'); has2d = await detect2DScan(file); }
+  let uploadData = file;
+  if (type === 'rhino') {
+    setStatus('Verarbeite Rhino: Layer prüfen & Blöcke (Stützen etc.) auflösen …');
+    const pr = await processRhino(file);
+    has2d = pr.has3dScan;
+    if (pr.bytes) uploadData = new Blob([pr.bytes], { type: 'model/3dm' });
+    console.log(`[admin] Rhino verarbeitet: ${pr.added} Solids aus Blöcken aufgelöst, 3D_Scan=${has2d}`);
+  }
 
   const id = editing ? editing.id : crypto.randomUUID();
   const ext = file.name.split('.').pop().toLowerCase();
   const path = `projects/${id}/model.${ext}`;
 
-  setStatus(`Lade hoch (${(file.size / 1048576).toFixed(0)} MB) … das kann dauern.`);
-  const { error: upErr } = await sb.storage.from('models').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+  setStatus(`Lade hoch (${(uploadData.size / 1048576).toFixed(0)} MB) … das kann dauern.`);
+  const { error: upErr } = await sb.storage.from('models').upload(path, uploadData, { upsert: true, contentType: type === 'rhino' ? 'model/3dm' : (file.type || 'application/zip') });
   if (upErr) { setStatus('Upload fehlgeschlagen: ' + upErr.message); $('upload-btn').disabled = false; return; }
 
   if (editing) {

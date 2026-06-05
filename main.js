@@ -89,11 +89,32 @@ function addDaylight() {
   scene.add(hemi, sun, fill);
 }
 
+// Robuste Bounding-Box: ignoriert weit entfernte Ausreißer (z. B. 2D-Pläne,
+// Planköpfe, Logos), die sonst die Start-Kamera extrem weit weg schieben.
+function robustModelBox(root) {
+  root.updateMatrixWorld(true);
+  const centers = [], boxes = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const b = new THREE.Box3().setFromObject(o);
+    if (!b.isEmpty()) { boxes.push(b); centers.push(b.getCenter(new THREE.Vector3())); }
+  });
+  if (boxes.length === 0) return new THREE.Box3().setFromObject(root);
+  const med = (arr) => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+  const mc = new THREE.Vector3(med(centers.map((c) => c.x)), med(centers.map((c) => c.y)), med(centers.map((c) => c.z)));
+  const dist = centers.map((c) => c.distanceTo(mc)).sort((a, b) => a - b);
+  const p75 = dist[Math.floor(dist.length * 0.75)] || 0;
+  const thr = p75 * 1.5 + 1;
+  const box = new THREE.Box3();
+  boxes.forEach((b, i) => { if (centers[i].distanceTo(mc) <= thr) box.union(b); });
+  return box.isEmpty() ? new THREE.Box3().setFromObject(root) : box;
+}
+
 function finishLoad(root) {
   model = root;
   model.updateMatrixWorld(true);
   scene.add(model);
-  const box = new THREE.Box3().setFromObject(model);
+  const box = robustModelBox(model);
   box.getCenter(modelCenter);
   const size = box.getSize(new THREE.Vector3());
   modelRadius = Math.max(size.x, size.y, size.z) * 0.5 || 5;
