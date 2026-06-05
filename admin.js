@@ -109,7 +109,9 @@ function explodeInstances(rhino, doc) {
   const clone = (g) => rhino.CommonObject.decode(g.encode());
   // Layer-Namen + Sichtbarkeit (Eigen-Ebene der Unterobjekte erhalten; ausgeblendete Instanzen überspringen)
   const layerName = {}, layerVisible = {};
-  { const L = doc.layers(); for (let i = 0; i < L.count; i++) { const l = L.get(i); layerName[i] = (l.name || ''); layerVisible[i] = l.visible !== false; } }
+  // Hinweis: die .3dm-visible-Flagge ist bei VisualARQ teils unzuverlässig.
+  // Daher gilt zusätzlich: ein Layer namens "hide" ist IMMER ausgeblendet.
+  { const L = doc.layers(); for (let i = 0; i < L.count; i++) { const l = L.get(i); const nm = (l.name || ''); layerName[i] = nm; layerVisible[i] = l.visible !== false && nm.trim().toLowerCase() !== 'hide'; } }
   let added = 0, skipped = 0;
 
   function addSolid(g, layerIndex, xforms) {
@@ -172,7 +174,7 @@ $('upload-btn').addEventListener('click', async () => {
     const pr = await processRhino(file);
     has2d = pr.has3dScan;
     if (pr.bytes) uploadData = new Blob([pr.bytes], { type: 'model/3dm' });
-    console.log(`[admin BUILD 21] Rhino: ${pr.added} Solids aufgelöst · ${pr.skipped} ausgeblendete Blöcke übersprungen · 3D_Scan=${has2d}`);
+    console.log(`[admin BUILD 22] Rhino: ${pr.added} Solids aufgelöst · ${pr.skipped} ausgeblendete Blöcke übersprungen · 3D_Scan=${has2d}`);
     setStatus(`Verarbeitet: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke ausgelassen. Lade hoch …`);
   }
 

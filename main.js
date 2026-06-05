@@ -230,8 +230,8 @@ function postProcessRhino(root) {
       o.material = glassMat;
       o.userData.isGlass = true;
       o.renderOrder = 2;
-    } else if (layer && layer.visible === false) {
-      o.visible = false;          // Layer ist in Rhino ausgeblendet
+    } else if (layer && (layer.visible === false || ln === 'hide')) {
+      o.visible = false;          // Layer in Rhino ausgeblendet (oder Layer heißt "hide")
     }
   });
   remove.forEach((o) => { if (o.parent) o.parent.remove(o); o.geometry && o.geometry.dispose(); });
