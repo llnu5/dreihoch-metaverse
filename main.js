@@ -110,6 +110,9 @@ loader.load(
     loaderEl.classList.add('hidden');
     setTimeout(() => (loaderEl.style.display = 'none'), 700);
     renderer.domElement.focus();
+
+    // Kommentar-Modul informieren, dass Modell & API bereit sind
+    window.dispatchEvent(new CustomEvent('viewer-ready'));
   },
   (xhr) => {
     if (xhr.lengthComputable) {
@@ -193,7 +196,14 @@ dom.addEventListener('wheel', (e) => {
   document.getElementById('speedval').textContent = speedMult.toFixed(1);
 }, { passive: false });
 
+// Tastatureingaben in Textfeldern (Kommentare) dürfen die Kamera NICHT bewegen.
+function isTyping() {
+  const a = document.activeElement;
+  return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
+}
+
 window.addEventListener('keydown', (e) => {
+  if (isTyping()) return;
   keys[e.code] = true;
   if (e.code === 'KeyR') resetView();
 });
@@ -243,19 +253,93 @@ document.getElementById('hud-title').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------------------
+//  API für das Kommentar-/Annotationsmodul (comments.js)
+// ---------------------------------------------------------------------------
+const up = new THREE.Vector3(0, 1, 0);
+const _ray = new THREE.Raycaster();
+let frameCallback = null;       // wird jeden Frame aufgerufen (Pin-Positionen)
+let tween = null;               // sanftes Anfliegen einer Stelle
+
+// NDC (-1..1) -> Treffer auf dem Modell oder null
+function raycastModel(ndcX, ndcY) {
+  if (!model) return null;
+  _ray.setFromCamera({ x: ndcX, y: ndcY }, camera);
+  const hits = _ray.intersectObject(model, true);
+  return hits.length ? hits[0] : null;
+}
+
+// 3D-Weltpunkt -> Bildschirmkoordinaten (px) + Sichtbarkeit
+function worldToScreen(v) {
+  const p = v.clone().project(camera);
+  return {
+    x: (p.x * 0.5 + 0.5) * window.innerWidth,
+    y: (-p.y * 0.5 + 0.5) * window.innerHeight,
+    behind: p.z > 1,
+  };
+}
+
+// Ist der Punkt von der Kamera aus durch Geometrie verdeckt?
+function isOccluded(point) {
+  if (!model) return false;
+  const dir = point.clone().sub(camera.position);
+  const len = dir.length();
+  if (len < 0.001) return false;
+  dir.divideScalar(len);
+  _ray.set(camera.position, dir);
+  const hits = _ray.intersectObject(model, true);
+  return hits.length > 0 && hits[0].distance < len - 0.18;
+}
+
+// Kamera sanft zu einer Stelle bewegen und sie anschauen
+function flyTo(point) {
+  const dist = Math.min(3.0, Math.max(1.2, modelRadius * 0.4));
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const toPos = point.clone().add(dir.multiplyScalar(-dist));
+  const m = new THREE.Matrix4().lookAt(toPos, point, up);
+  const toQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+  tween = {
+    fromPos: camera.position.clone(), toPos,
+    fromQuat: camera.quaternion.clone(), toQuat,
+    target: point.clone(), t: 0, dur: 0.7,
+  };
+  if (mode === 'orbit') orbit.target.copy(point);
+}
+
+function updateTween(dt) {
+  tween.t += dt / tween.dur;
+  const x = Math.min(1, tween.t);
+  const k = x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; // easeInOutQuad
+  camera.position.lerpVectors(tween.fromPos, tween.toPos, k);
+  camera.quaternion.slerpQuaternions(tween.fromQuat, tween.toQuat, k);
+  if (tween.t >= 1) tween = null;
+}
+
+// Öffentliche Schnittstelle
+window.viewer = {
+  THREE, scene, camera, renderer, domElement: dom,
+  getModel: () => model,
+  isWalkMode: () => mode === 'walk',
+  isLooking: () => looking,
+  raycastModel, worldToScreen, isOccluded, flyTo,
+  setFrameCallback: (fn) => { frameCallback = fn; },
+};
+
+// ---------------------------------------------------------------------------
 //  Render-Loop
 // ---------------------------------------------------------------------------
 const clock = new THREE.Clock();
 const fwd = new THREE.Vector3();
 const right = new THREE.Vector3();
-const up = new THREE.Vector3(0, 1, 0);
 const move = new THREE.Vector3();
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.1);
 
-  if (mode === 'walk' && model) {
+  if (tween) updateTween(dt);
+
+  if (mode === 'walk' && model && !isTyping() && !tween) {
     let speed = baseSpeed * speedMult;
     if (keys['ShiftLeft'] || keys['ShiftRight']) speed *= 3.0;
     if (keys['ControlLeft'] || keys['ControlRight']) speed *= 0.3;
@@ -275,10 +359,11 @@ function animate() {
       move.normalize().multiplyScalar(speed * dt);
       camera.position.add(move);
     }
-  } else if (mode === 'orbit') {
+  } else if (mode === 'orbit' && !tween) {
     orbit.update();
   }
 
+  if (frameCallback) frameCallback();
   renderer.render(scene, camera);
 }
 animate();
