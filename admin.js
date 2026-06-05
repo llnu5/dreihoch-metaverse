@@ -81,21 +81,43 @@ async function processRhino(file) {
   return { has3dScan, bytes, added };
 }
 
-// Alle Instanz-Referenzen rekursiv auflösen: Definitions-Geometrie (Solids) an
-// die Instanz-Transformation gesetzt der Objekttabelle hinzufügen.
+// Instanz-Referenzen (Blöcke) rekursiv auflösen: Definitions-Geometrie geklont,
+// an die (verkettete) Instanz-Transformation gesetzt, der Objekttabelle hinzufügen.
+// WICHTIG: jede Member-Geometrie KLONEN, sonst summieren sich Transformationen
+// über geteilte Definitionen (Objekte würden im Raum verstreut).
 function explodeInstances(rhino, doc) {
   const objs = doc.objects(), idefs = doc.instanceDefinitions();
   const N = objs.count;
+
+  // Layer, die bereits direkte Körper enthalten -> dort NICHT auflösen (keine Doppelung)
+  const directSolidLayers = new Set();
+  for (let i = 0; i < N; i++) {
+    const o = objs.get(i); if (!o) continue; const g = o.geometry(); if (!g) continue;
+    const t = g.constructor.name;
+    if (t.includes('Brep') || t.includes('Extrusion') || t.includes('Mesh')) directSolidLayers.add(o.attributes().layerIndex);
+  }
+
+  // Dedup-Signaturen aus vorhandenen Körpern (gleiche Position+Größe -> nicht doppeln)
+  const sig = (bb) => { const q = (v) => Math.round(v / 25); return [q((bb.min[0] + bb.max[0]) / 2), q((bb.min[1] + bb.max[1]) / 2), q((bb.min[2] + bb.max[2]) / 2), q(bb.max[0] - bb.min[0]), q(bb.max[1] - bb.min[1]), q(bb.max[2] - bb.min[2])].join(','); };
+  const occupied = new Set();
+  for (let i = 0; i < N; i++) { const o = objs.get(i); if (!o) continue; const g = o.geometry(); if (!g) continue; const t = g.constructor.name; if (t.includes('Brep') || t.includes('Extrusion') || t.includes('Mesh')) { try { occupied.add(sig(g.getBoundingBox())); } catch (e) {} } }
+
   const idefById = {};
   for (let i = 0; i < idefs.count; i++) { const d = idefs.get(i); idefById[d.id] = d.getObjectIds ? d.getObjectIds() : []; }
   const idxById = {};
   for (let i = 0; i < N; i++) { const o = objs.get(i); if (o) idxById[o.attributes().id] = i; }
+  const clone = (g) => rhino.CommonObject.decode(g.encode());
   let added = 0;
 
-  function addSolid(mg, layerIndex, xforms) {
-    for (let k = xforms.length - 1; k >= 0; k--) { try { mg.transform(xforms[k]); } catch (e) { return; } }
-    const a = new rhino.ObjectAttributes(); a.layerIndex = layerIndex;
+  function addSolid(g, layerIndex, xforms) {
+    const mg = clone(g);                                   // <- klonen, sonst summieren sich Transformationen!
+    for (let k = xforms.length - 1; k >= 0; k--) { if (!mg.transform(xforms[k])) return; }
     const t = mg.constructor.name;
+    if (!(t.includes('Extrusion') || t.includes('Brep') || t.includes('Mesh'))) return;
+    let s; try { s = sig(mg.getBoundingBox()); } catch (e) { s = null; }
+    if (s && occupied.has(s)) return;                      // Doppelung vermeiden
+    if (s) occupied.add(s);
+    const a = new rhino.ObjectAttributes(); a.layerIndex = layerIndex;
     if (t.includes('Extrusion')) { if (!objs.addExtrusion(mg, a)) { try { const b = mg.toBrep(true); if (b) objs.addBrep(b, a); } catch (e) { return; } } added++; }
     else if (t.includes('Brep')) { objs.addBrep(mg, a); added++; }
     else if (t.includes('Mesh')) { objs.addMesh(mg, a); added++; }
@@ -113,7 +135,9 @@ function explodeInstances(rhino, doc) {
   for (let i = 0; i < N; i++) {
     const o = objs.get(i); if (!o) continue;
     const g = o.geometry(); if (!g || g.constructor.name !== 'InstanceReference') continue;
-    ex(g.parentIdefId, o.attributes().layerIndex, [g.xform], 1);
+    const li = o.attributes().layerIndex;
+    if (directSolidLayers.has(li)) continue;               // Doppelung vermeiden
+    ex(g.parentIdefId, li, [g.xform], 1);
   }
   return added;
 }
