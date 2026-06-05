@@ -51,7 +51,7 @@ const barfill = document.getElementById('barfill');
 const pctEl = document.getElementById('pct');
 const subEl = loaderEl ? loaderEl.querySelector('.sub') : null;
 
-let scanGroup = null, cadGroup = null;   // Rhino: 2D_Scan vs. restliche Geometrie
+let scanGroup = null, cadGroup = null;   // Rhino: Layer "3D_Scan" vs. restliche Geometrie (CAD)
 
 function setProgress(loaded, total) {
   if (total) { const p = Math.min(100, Math.round((loaded / total) * 100)); barfill.style.width = p + '%'; pctEl.innerHTML = p + '&nbsp;%'; }
@@ -182,7 +182,7 @@ function splitByScanLayer(root) {
   root.traverse((o) => {
     if (!o.isMesh && !o.isLine && !o.isPoints) return;
     const n = rhinoLayerName(o, layers);
-    (n && String(n).trim().toLowerCase() === '2d_scan' ? sc : cd).push(o);
+    (n && String(n).trim().toLowerCase() === '3d_scan' ? sc : cd).push(o);
   });
   sc.forEach((o) => scanGroup.attach(o));
   cd.forEach((o) => cadGroup.attach(o));

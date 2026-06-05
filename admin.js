@@ -52,7 +52,7 @@ function setFile(file) {
 }
 
 // ---------------------------------------------------------------------------
-//  Rhino: Layer "2D_Scan" erkennen
+//  Rhino: Layer "3D_Scan" erkennen
 // ---------------------------------------------------------------------------
 let _rhino;
 async function rhinoModule() {
@@ -67,7 +67,7 @@ async function detect2DScan(file) {
     const layers = doc.layers(); let found = false;
     for (let i = 0; i < layers.count(); i++) {
       const l = layers.get(i);
-      if ((l.name || '').trim().toLowerCase() === '2d_scan') found = true;
+      if ((l.name || '').trim().toLowerCase() === '3d_scan') found = true;
       l.delete && l.delete();
     }
     doc.delete && doc.delete();
@@ -147,7 +147,7 @@ async function renderList() {
     el.innerHTML = `
       <div class="ic">${p.type === 'rhino' ? '◳' : '⬢'}</div>
       <div class="meta">
-        <div class="nm">${escapeHtml(p.name)}${p.has_2d_scan ? '<span class="tag">2D_Scan</span>' : ''}</div>
+        <div class="nm">${escapeHtml(p.name)}${p.has_2d_scan ? '<span class="tag">3D_Scan</span>' : ''}</div>
         <div class="det">${p.type === 'rhino' ? 'Rhino' : 'Matterport'} · v${p.version} · ${escapeHtml(p.file_name || '')}</div>
         <div class="det"><a href="${link}" target="_blank">${link}</a></div>
       </div>
