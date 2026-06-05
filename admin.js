@@ -107,6 +107,8 @@ function explodeInstances(rhino, doc) {
   const idxById = {};
   for (let i = 0; i < N; i++) { const o = objs.get(i); if (o) idxById[o.attributes().id] = i; }
   const clone = (g) => rhino.CommonObject.decode(g.encode());
+  // Layer-Namen (um die Eigen-Ebene der Unterobjekte zu erhalten, z. B. "Glass")
+  const layerName = {}; { const L = doc.layers(); for (let i = 0; i < L.count; i++) layerName[i] = (L.get(i).name || ''); }
   let added = 0;
 
   function addSolid(g, layerIndex, xforms) {
@@ -122,14 +124,19 @@ function explodeInstances(rhino, doc) {
     else if (t.includes('Brep')) { objs.addBrep(mg, a); added++; }
     else if (t.includes('Mesh')) { objs.addMesh(mg, a); added++; }
   }
-  function ex(defId, layerIndex, xforms, depth) {
+  function ex(defId, inheritedLayer, xforms, depth) {
     if (depth > 6) return;
     for (const mid of (idefById[defId] || [])) {
       const idx = idxById[mid]; if (idx == null) continue;
-      const s = objs.get(idx); if (!s) continue;
-      const g = s.geometry(); if (!g) continue;
-      if (g.constructor.name === 'InstanceReference') ex(g.parentIdefId, layerIndex, [...xforms, g.xform], depth + 1);
-      else addSolid(g, layerIndex, xforms);
+      const src = objs.get(idx); if (!src) continue;
+      const g = src.geometry(); if (!g) continue;
+      // Eigen-Ebene des Unterobjekts erhalten (Glas-Scheiben bleiben auf "Glass");
+      // "By Parent"/leer -> Ebene der übergeordneten Instanz erben.
+      const memIdx = src.attributes().layerIndex;
+      const memName = (layerName[memIdx] || '').toLowerCase();
+      const eff = (memName === 'by parent' || memName === 'byparent' || memName === '') ? inheritedLayer : memIdx;
+      if (g.constructor.name === 'InstanceReference') ex(g.parentIdefId, eff, [...xforms, g.xform], depth + 1);
+      else addSolid(g, eff, xforms);
     }
   }
   for (let i = 0; i < N; i++) {

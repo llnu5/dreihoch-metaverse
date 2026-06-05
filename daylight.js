@@ -38,6 +38,7 @@ function defaults() {
     time: 14, north: 0,
     post: {
       shadows: true, shadowRes: 2048, supersample: 1, ambient: 0.25,
+      ibl: true, iblIntensity: 1,
       ao: { on: true, radius: 16 },
       bloom: { on: false, strength: 0.35, threshold: 0.85, radius: 0.4 },
       dof: { on: false, focus: 0, aperture: 2, maxblur: 0.01 },
@@ -52,6 +53,7 @@ function defaults() {
 
 let viewer, scene, camera, renderer, bounds;
 let sun, hemi, sky, ground, amb;
+let pmrem = null, envScene = null, envSky = null, envRT = null;
 let composer = null;
 let cfg = defaults();
 
@@ -138,6 +140,9 @@ panel.innerHTML = `
         <div class="dl-row"><label>Auflösung</label><select id="dl-shadowRes"><option value="1024">1024</option><option value="2048">2048</option><option value="4096">4096</option></select></div>
       </div>
       <div class="dl-row" style="margin-top:9px"><label>Supersampling</label><select id="dl-supersample"><option value="1">1× (schnell)</option><option value="1.5">1.5×</option><option value="2">2× (scharf)</option></select></div>
+      <div style="height:9px"></div>
+      ${toggle('dl-ibl', 'Umgebungsreflexionen (IBL)')}
+      <div class="dl-sub">${slider('dl-ibl-int', 'Intensität', 0, 2, 0.05, 1, '')}</div>
     </div>
 
     <div class="dl-sec">
@@ -280,7 +285,32 @@ function buildComposer() {
 }
 
 function applyAmbient() { if (amb) amb.intensity = cfg.post.ambient; }
-function applyAll() { applyTone(); applyShadows(); applySupersample(); applyAmbient(); buildComposer(); applySun(); }
+
+// IBL: Umgebungskarte aus dem aktuellen Himmel erzeugen -> Reflexionen + Fülllicht
+function updateEnvironment() {
+  if (!pmrem) return;
+  if (!cfg.post.ibl) { scene.environment = null; return; }
+  const su = sky.material.uniforms, eu = envSky.material.uniforms;
+  eu.sunPosition.value.copy(su.sunPosition.value);
+  eu.turbidity.value = su.turbidity.value; eu.rayleigh.value = su.rayleigh.value;
+  eu.mieCoefficient.value = su.mieCoefficient.value; eu.mieDirectionalG.value = su.mieDirectionalG.value;
+  if (envRT) envRT.dispose();
+  envRT = pmrem.fromScene(envScene, 0, 0.1, 100);
+  scene.environment = envRT.texture;
+}
+function applyEnvIntensity() {
+  const v = cfg.post.ibl ? cfg.post.iblIntensity : 0;
+  const m = viewer.getModel(); if (!m) return;
+  m.traverse((o) => {
+    if (!o.isMesh) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((mat) => { if (mat && 'envMapIntensity' in mat) mat.envMapIntensity = v; });
+  });
+}
+function applyAll() {
+  applyTone(); applyShadows(); applySupersample(); applyAmbient();
+  applySun(); updateEnvironment(); applyEnvIntensity();
+  buildComposer();
+}
 
 // ---------------------------------------------------------------------------
 //  Presets
@@ -307,6 +337,7 @@ function writeInputs() {
   const p = cfg.post;
   setSlider('dl-time', cfg.time, 'time'); setSlider('dl-north', cfg.north, '°'); setSlider('dl-ambient', p.ambient, '');
   setTog('dl-shadows', p.shadows); $('dl-shadowRes').value = String(p.shadowRes); $('dl-supersample').value = String(p.supersample);
+  setTog('dl-ibl', p.ibl); setSlider('dl-ibl-int', p.iblIntensity, '');
   setTog('dl-ao', p.ao.on); setSlider('dl-ao-radius', p.ao.radius, '');
   setTog('dl-bloom', p.bloom.on); setSlider('dl-bloom-strength', p.bloom.strength, ''); setSlider('dl-bloom-threshold', p.bloom.threshold, ''); setSlider('dl-bloom-radius', p.bloom.radius, '');
   setTog('dl-dof', p.dof.on); setSlider('dl-dof-focus', p.dof.focus, '%'); setSlider('dl-dof-aperture', p.dof.aperture, '');
@@ -320,6 +351,7 @@ function readInputs() {
   const p = cfg.post;
   cfg.time = +$('dl-time').value; cfg.north = +$('dl-north').value; p.ambient = +$('dl-ambient').value;
   p.shadows = $('dl-shadows-tog').classList.contains('on'); p.shadowRes = +$('dl-shadowRes').value; p.supersample = +$('dl-supersample').value;
+  p.ibl = $('dl-ibl-tog').classList.contains('on'); p.iblIntensity = +$('dl-ibl-int').value;
   p.ao.on = $('dl-ao-tog').classList.contains('on'); p.ao.radius = +$('dl-ao-radius').value;
   p.bloom.on = $('dl-bloom-tog').classList.contains('on'); p.bloom.strength = +$('dl-bloom-strength').value; p.bloom.threshold = +$('dl-bloom-threshold').value; p.bloom.radius = +$('dl-bloom-radius').value;
   p.dof.on = $('dl-dof-tog').classList.contains('on'); p.dof.focus = +$('dl-dof-focus').value; p.dof.aperture = +$('dl-dof-aperture').value;
@@ -377,6 +409,9 @@ function buildRig() {
   amb = new THREE.AmbientLight(0xffffff, cfg.post.ambient); scene.add(amb);
   sun = new THREE.DirectionalLight(0xffffff, 2.0); scene.add(sun); scene.add(sun.target);
   sky = new Sky(); sky.scale.setScalar(Math.max(2000, bounds.radius * 100)); scene.add(sky);
+  // IBL: separater Himmel + PMREM-Generator für Umgebungsreflexionen
+  envScene = new THREE.Scene(); envSky = new Sky(); envSky.scale.setScalar(100); envScene.add(envSky);
+  pmrem = new THREE.PMREMGenerator(renderer); pmrem.compileEquirectangularShader();
   const g = new THREE.Mesh(new THREE.PlaneGeometry(bounds.radius * 8, bounds.radius * 8), new THREE.ShadowMaterial({ opacity: 0.32 }));
   g.rotation.x = -Math.PI / 2; g.position.set(bounds.center.x, bounds.box.min.y - bounds.radius * 0.001, bounds.center.z);
   g.receiveShadow = true; ground = g; scene.add(g);
