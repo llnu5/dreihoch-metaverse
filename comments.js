@@ -12,6 +12,11 @@ const URL = window.SUPABASE_URL;
 const KEY = window.SUPABASE_ANON_KEY;
 const CONFIGURED = typeof URL === 'string' && URL.startsWith('http') && typeof KEY === 'string' && KEY.length > 20;
 
+// Projekt-Scope: Annotationen gehören zu genau einem Projekt (NULL = Standard).
+const PID = window.PROJECT_ID || null;
+const scope = (q) => (PID ? q.eq('project_id', PID) : q.is('project_id', null));
+const inProject = (row) => ((row && row.project_id) || null) === PID;
+
 // ---------------------------------------------------------------------------
 //  Styles
 // ---------------------------------------------------------------------------
@@ -327,8 +332,8 @@ async function initBackend() {
 }
 
 async function loadAll() {
-  const { data: th, error: e1 } = await sb.from('threads').select('*').order('created_at');
-  const { data: cm, error: e2 } = await sb.from('comments').select('*').order('created_at');
+  const { data: th, error: e1 } = await scope(sb.from('threads').select('*')).order('created_at');
+  const { data: cm, error: e2 } = await scope(sb.from('comments').select('*')).order('created_at');
   if (e1 || e2) { console.error('[comments] load', e1 || e2); return; }
   threads.clear();
   for (const t of th) threads.set(t.id, toThread(t));
@@ -342,6 +347,7 @@ function toThread(t) {
 }
 
 function onThreadChange(p) {
+  if (!inProject(p.new) && !inProject(p.old)) return;
   if (p.eventType === 'DELETE') { threads.delete(p.old.id); if (activeId === p.old.id) closeCard(); }
   else {
     const ex = threads.get(p.new.id);
@@ -353,6 +359,7 @@ function onThreadChange(p) {
   if (activeId === (p.new && p.new.id)) openThread(activeId, true);
 }
 function onCommentChange(p) {
+  if (!inProject(p.new) && !inProject(p.old)) return;
   if (p.eventType === 'INSERT') {
     const t = threads.get(p.new.thread_id);
     if (t && !t.comments.some((c) => c.id === p.new.id)) t.comments.push(p.new);
@@ -369,7 +376,7 @@ function onCommentChange(p) {
 // ---------------------------------------------------------------------------
 async function createThread(pos, body) {
   const { data, error } = await sb.from('threads')
-    .insert({ author: name, body, pos_x: pos.x, pos_y: pos.y, pos_z: pos.z })
+    .insert({ author: name, body, pos_x: pos.x, pos_y: pos.y, pos_z: pos.z, project_id: PID })
     .select().single();
   if (error) { alert('Konnte Kommentar nicht speichern: ' + error.message); return; }
   threads.set(data.id, toThread(data));
@@ -378,7 +385,7 @@ async function createThread(pos, body) {
 }
 async function addReply(threadId, body) {
   const { data, error } = await sb.from('comments')
-    .insert({ thread_id: threadId, author: name, body }).select().single();
+    .insert({ thread_id: threadId, author: name, body, project_id: PID }).select().single();
   if (error) { alert('Antwort fehlgeschlagen: ' + error.message); return; }
   const t = threads.get(threadId);
   if (t && !t.comments.some((c) => c.id === data.id)) t.comments.push(data);

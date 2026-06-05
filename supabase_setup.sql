@@ -55,3 +55,37 @@ alter table public.measurements enable row level security;
 drop policy if exists measurements_all on public.measurements;
 create policy measurements_all on public.measurements for all using (true) with check (true);
 alter publication supabase_realtime add table public.measurements;
+
+-- ---------------------------------------------------------------------------
+--  Projekte + Upload (Multi-Projekt)
+-- ---------------------------------------------------------------------------
+create table if not exists public.projects (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  type        text not null,                 -- 'matterport' | 'rhino'
+  file_path   text,                          -- Pfad im Storage-Bucket 'models'
+  file_name   text,
+  has_2d_scan boolean not null default false,
+  version     int not null default 1,
+  created_at  timestamptz not null default now()
+);
+alter table public.projects enable row level security;
+drop policy if exists projects_all on public.projects;
+create policy projects_all on public.projects for all using (true) with check (true);
+alter publication supabase_realtime add table public.projects;
+
+-- project_id an alle Annotationen (NULL = Standard-/Prinzenstrasse-Projekt)
+alter table public.threads       add column if not exists project_id uuid;
+alter table public.comments      add column if not exists project_id uuid;
+alter table public.measurements  add column if not exists project_id uuid;
+alter table public.bookmarks     add column if not exists project_id uuid;
+alter table public.chat_messages add column if not exists project_id uuid;
+
+-- Storage-Bucket fuer Modelldateien (oeffentlich lesbar, 500 MB/Datei)
+insert into storage.buckets (id, name, public, file_size_limit)
+  values ('models','models', true, 524288000)
+  on conflict (id) do update set public = true, file_size_limit = 524288000;
+drop policy if exists models_read  on storage.objects;
+drop policy if exists models_write on storage.objects;
+create policy models_read  on storage.objects for select using (bucket_id = 'models');
+create policy models_write on storage.objects for all    using (bucket_id = 'models') with check (bucket_id = 'models');

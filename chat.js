@@ -8,6 +8,10 @@ const URL = window.SUPABASE_URL;
 const KEY = window.SUPABASE_ANON_KEY;
 const CONFIGURED = typeof URL === 'string' && URL.startsWith('http') && typeof KEY === 'string' && KEY.length > 20;
 
+const PID = window.PROJECT_ID || null;
+const scope = (q) => (PID ? q.eq('project_id', PID) : q.is('project_id', null));
+const inProject = (row) => ((row && row.project_id) || null) === PID;
+
 // ---------------------------------------------------------------------------
 //  Styles
 // ---------------------------------------------------------------------------
@@ -141,12 +145,13 @@ function render() {
 async function init() {
   if (!CONFIGURED) { btnChat.title = 'Backend nicht konfiguriert'; return; }
   sb = createClient(URL, KEY, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
-  const { data, error } = await sb.from('chat_messages').select('*').order('created_at');
+  const { data, error } = await scope(sb.from('chat_messages').select('*')).order('created_at');
   if (error) { console.error('[chat] load', error); return; }
   for (const m of data) msgs.set(m.id, m);
   render(); msgsEl.scrollTop = msgsEl.scrollHeight;
   sb.channel('chat')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, (p) => {
+      if (!inProject(p.new) && !inProject(p.old)) return;
       if (p.eventType === 'INSERT') msgs.set(p.new.id, p.new);
       else if (p.eventType === 'DELETE') msgs.delete(p.old.id);
       render();
@@ -158,7 +163,7 @@ async function init() {
 async function send() {
   const body = ta.value.trim(); if (!body || !sb) return;
   ta.value = '';
-  const { data, error } = await sb.from('chat_messages').insert({ author: myName(), body }).select().single();
+  const { data, error } = await sb.from('chat_messages').insert({ author: myName(), body, project_id: PID }).select().single();
   if (error) { alert('Senden fehlgeschlagen: ' + error.message); return; }
   msgs.set(data.id, data); render(); msgsEl.scrollTop = msgsEl.scrollHeight;
 }

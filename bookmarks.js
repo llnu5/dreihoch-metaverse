@@ -9,6 +9,10 @@ const URL = window.SUPABASE_URL;
 const KEY = window.SUPABASE_ANON_KEY;
 const CONFIGURED = typeof URL === 'string' && URL.startsWith('http') && typeof KEY === 'string' && KEY.length > 20;
 
+const PID = window.PROJECT_ID || null;
+const scope = (q) => (PID ? q.eq('project_id', PID) : q.is('project_id', null));
+const inProject = (row) => ((row && row.project_id) || null) === PID;
+
 // ---------------------------------------------------------------------------
 //  Styles
 // ---------------------------------------------------------------------------
@@ -122,7 +126,7 @@ async function saveBookmark() {
   const p = pendingPose.pos, q = pendingPose.quat;
   formEl.classList.remove('show'); pendingPose = null;
   if (!sb) { alert('Backend nicht eingerichtet (SQL ausführen).'); return; }
-  const row = { name, px: p.x, py: p.y, pz: p.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w };
+  const row = { name, px: p.x, py: p.y, pz: p.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, project_id: PID };
   const { data, error } = await sb.from('bookmarks').insert(row).select().single();
   if (error) { alert('Bookmark fehlgeschlagen: ' + error.message); return; }
   bms.set(data.id, data); render();
@@ -165,12 +169,13 @@ function render() {
 async function init() {
   if (!CONFIGURED) { btnBm.title = 'Backend nicht konfiguriert'; return; }
   sb = createClient(URL, KEY, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
-  const { data, error } = await sb.from('bookmarks').select('*').order('created_at');
+  const { data, error } = await scope(sb.from('bookmarks').select('*')).order('created_at');
   if (error) { console.error('[bookmarks] load', error); return; }
   for (const b of data) bms.set(b.id, b);
   render();
   sb.channel('bm')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bookmarks' }, (p) => {
+      if (!inProject(p.new) && !inProject(p.old)) return;
       if (p.eventType === 'INSERT') bms.set(p.new.id, p.new);
       else if (p.eventType === 'DELETE') bms.delete(p.old.id);
       else if (p.eventType === 'UPDATE') bms.set(p.new.id, p.new);

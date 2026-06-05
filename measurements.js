@@ -8,6 +8,10 @@ const URL = window.SUPABASE_URL;
 const KEY = window.SUPABASE_ANON_KEY;
 const CONFIGURED = typeof URL === 'string' && URL.startsWith('http') && typeof KEY === 'string' && KEY.length > 20;
 
+const PID = window.PROJECT_ID || null;
+const scope = (q) => (PID ? q.eq('project_id', PID) : q.is('project_id', null));
+const inProject = (row) => ((row && row.project_id) || null) === PID;
+
 const LINE_COLOR = 0x00e5ff;
 const SPHERE_R = 0.045;          // Endpunkt-Radius in Metern
 
@@ -102,11 +106,12 @@ function disposeObj(o) {
 async function initBackend() {
   if (!CONFIGURED) { btnMeasure.title = 'Backend nicht konfiguriert (config.js)'; return; }
   sb = createClient(URL, KEY, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
-  const { data, error } = await sb.from('measurements').select('*').order('created_at');
+  const { data, error } = await scope(sb.from('measurements').select('*')).order('created_at');
   if (error) { console.error('[measure] load', error); return; }
   for (const r of data) addItem(r);
   sb.channel('mess')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'measurements' }, (p) => {
+      if (!inProject(p.new) && !inProject(p.old)) return;
       if (p.eventType === 'INSERT') addItem(p.new);
       else if (p.eventType === 'DELETE') removeItem(p.old.id);
     })
@@ -115,7 +120,7 @@ async function initBackend() {
 
 async function createMeasurement(a, b) {
   const author = localStorage.getItem('cmt_name') || 'Gast';
-  const row = { author, ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z };
+  const row = { author, ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, project_id: PID };
   const { data, error } = await sb.from('measurements').insert(row).select().single();
   if (error) { alert('Messung konnte nicht gespeichert werden: ' + error.message); return; }
   addItem(data);

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · 3D Projekte</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root {
+      --blue:#0A84FF; --green:#30D158; --red:#FF453A;
+      --label:rgba(255,255,255,.96); --label2:rgba(235,235,245,.62); --label3:rgba(235,235,245,.32);
+      --mat:rgba(30,30,33,.7); --hairline:rgba(255,255,255,.14); --hairline-soft:rgba(255,255,255,.08);
+      --shadow:0 10px 34px rgba(0,0,0,.46); --blur:saturate(180%) blur(22px);
+      --font:"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,sans-serif;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { min-height:100vh; background:radial-gradient(120% 90% at 50% 0%, #16181c, #050506 70%);
+      color:var(--label); font-family:var(--font); -webkit-font-smoothing:antialiased; padding:24px; }
+    a { color:var(--blue); text-decoration:none; }
+    .wrap { max-width:760px; margin:0 auto; }
+    .card { background:var(--mat); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+      border:1px solid var(--hairline); border-radius:18px; box-shadow:var(--shadow); padding:22px; margin-bottom:18px; }
+    h1 { font-weight:300; font-size:26px; letter-spacing:-.3px; margin-bottom:4px; }
+    .sub { color:var(--label2); font-size:13px; margin-bottom:20px; }
+    h2 { font-size:16px; font-weight:700; margin-bottom:12px; }
+    label { display:block; font-size:12.5px; color:var(--label2); margin:0 0 6px; }
+    input[type=text], input[type=password] { width:100%; background:rgba(0,0,0,.3); border:1px solid var(--hairline);
+      border-radius:10px; color:#fff; padding:11px 13px; font:inherit; font-size:14px; outline:none; }
+    input:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(10,132,255,.25); }
+    .btn { display:inline-flex; align-items:center; gap:8px; background:var(--blue); color:#fff; border:0;
+      border-radius:10px; padding:11px 18px; font:600 14px var(--font); cursor:pointer; transition:background .15s, transform .08s; }
+    .btn:hover { background:#0a76e6; } .btn:active { transform:scale(.97); }
+    .btn.sec { background:rgba(118,118,128,.24); color:var(--label); } .btn.sec:hover { background:rgba(118,118,128,.4); }
+    .btn.danger { background:transparent; color:var(--red); } .btn.danger:hover { background:rgba(255,69,58,.12); }
+    .btn:disabled { opacity:.5; cursor:default; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .drop { border:1.5px dashed var(--hairline); border-radius:14px; padding:26px; text-align:center; color:var(--label2);
+      cursor:pointer; transition:border-color .15s, background .15s; }
+    .drop:hover, .drop.over { border-color:var(--blue); background:rgba(10,132,255,.06); color:var(--label); }
+    .drop b { color:var(--label); }
+    .file { font-size:13px; color:var(--label); margin-top:10px; }
+    .hint { font-size:12px; color:var(--label3); margin-top:8px; line-height:1.5; }
+    #status { font-size:13px; color:var(--label2); margin-top:12px; min-height:18px; }
+    .pbar { height:5px; background:rgba(255,255,255,.12); border-radius:99px; overflow:hidden; margin-top:10px; display:none; }
+    .pbar > i { display:block; height:100%; width:0%; background:var(--blue); border-radius:99px; transition:width .2s; }
+    .proj { display:flex; align-items:center; gap:12px; padding:13px; border:1px solid var(--hairline-soft);
+      border-radius:12px; background:rgba(255,255,255,.04); margin-bottom:10px; }
+    .proj .ic { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+      background:rgba(10,132,255,.18); color:#6cb6ff; font-size:18px; flex:0 0 auto; }
+    .proj .meta { flex:1; min-width:0; }
+    .proj .nm { font-weight:600; font-size:14px; }
+    .proj .det { font-size:11.5px; color:var(--label3); margin-top:2px; }
+    .tag { display:inline-block; font-size:10px; padding:1px 6px; border-radius:6px; background:rgba(48,209,88,.18); color:#5be08b; margin-left:6px; }
+    #login { max-width:380px; margin:12vh auto 0; }
+    .err { color:var(--red); font-size:12.5px; margin-top:8px; min-height:16px; }
+    .hidden { display:none !important; }
+  </style>
+</head>
+<body>
+  <!-- Login -->
+  <div id="login" class="card">
+    <h1>Admin</h1>
+    <div class="sub">3D-Projekte verwalten</div>
+    <label for="pw">Passwort</label>
+    <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password" />
+    <div class="err" id="login-err"></div>
+    <div style="margin-top:14px"><button class="btn" id="login-btn">Anmelden</button></div>
+  </div>
+
+  <!-- Panel -->
+  <div id="panel" class="wrap hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div><h1 style="font-size:22px">Projekte</h1><div class="sub" style="margin:0">Matterport-ZIP oder Rhino-.3dm hochladen</div></div>
+        <button class="btn sec" id="logout">Abmelden</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 id="form-title">Neues Projekt</h2>
+      <label for="pname">Projektname</label>
+      <input id="pname" type="text" placeholder="z. B. Prinzenstraße 85" />
+      <div style="height:14px"></div>
+      <div class="drop" id="drop">
+        <div><b>Datei wählen</b> oder hierher ziehen</div>
+        <div class="hint">.zip = Matterport-Scan (OBJ + Texturen, <b>ohne</b> cloud.xyz/PDFs zippen!) · .3dm = Rhino-Modell</div>
+        <div class="file" id="fname"></div>
+      </div>
+      <input id="file" type="file" accept=".zip,.3dm" class="hidden" />
+      <div class="pbar" id="pbar"><i></i></div>
+      <div id="status"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="upload-btn" disabled>Hochladen &amp; anlegen</button>
+        <button class="btn sec hidden" id="cancel-edit">Abbrechen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Vorhandene Projekte</h2>
+      <div id="list"><div class="sub">Lade…</div></div>
+    </div>
+  </div>
+
+  <script src="./config.js?v=9"></script>
+  <script type="module" src="./admin.js?v=9"></script>
+</body>
+</html>

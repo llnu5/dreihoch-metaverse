@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { Rhino3dmLoader } from 'three/addons/loaders/3DMLoader.js';
 
 // ---------------------------------------------------------------------------
 //  Szene, Kamera, Renderer
@@ -26,13 +29,10 @@ renderer.domElement.tabIndex = 0;
 //  Licht – Matterport-Texturen sind bereits "gebacken", daher kräftiges
 //  Ambient-Licht damit alles gut sichtbar ist.
 // ---------------------------------------------------------------------------
-scene.add(new THREE.HemisphereLight(0xffffff, 0x404550, 2.2));
-const dir = new THREE.DirectionalLight(0xffffff, 1.1);
-dir.position.set(5, 12, 8);
-scene.add(dir);
-const dir2 = new THREE.DirectionalLight(0xffffff, 0.5);
-dir2.position.set(-8, 6, -6);
-scene.add(dir2);
+const baseHemi = new THREE.HemisphereLight(0xffffff, 0x404550, 2.2); baseHemi.name = 'baselight';
+const dir = new THREE.DirectionalLight(0xffffff, 1.1); dir.position.set(5, 12, 8); dir.name = 'baselight';
+const dir2 = new THREE.DirectionalLight(0xffffff, 0.5); dir2.position.set(-8, 6, -6); dir2.name = 'baselight';
+scene.add(baseHemi, dir, dir2);
 
 // ---------------------------------------------------------------------------
 //  Zustand
@@ -44,92 +44,184 @@ const home = { pos: new THREE.Vector3(), target: new THREE.Vector3() };
 let mode = 'walk';            // 'walk' | 'orbit'
 
 // ---------------------------------------------------------------------------
-//  Modell laden
+//  Modell laden – je nach Projekt: Standard-GLB / Matterport-ZIP / Rhino-.3dm
 // ---------------------------------------------------------------------------
-const draco = new DRACOLoader();
-draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
-const loader = new GLTFLoader();
-loader.setDRACOLoader(draco);
-
 const loaderEl = document.getElementById('loader');
 const barfill = document.getElementById('barfill');
 const pctEl = document.getElementById('pct');
+const subEl = loaderEl ? loaderEl.querySelector('.sub') : null;
 
-loader.load(
-  './model.glb',
-  (gltf) => {
-    model = gltf.scene;
+let scanGroup = null, cadGroup = null;   // Rhino: 2D_Scan vs. restliche Geometrie
 
-    // Matterport-Modelle liegen oft mit Z nach oben -> auf Y-up drehen.
-    model.rotateX(-Math.PI / 2);
-    model.updateMatrixWorld(true);
+function setProgress(loaded, total) {
+  if (total) { const p = Math.min(100, Math.round((loaded / total) * 100)); barfill.style.width = p + '%'; pctEl.innerHTML = p + '&nbsp;%'; }
+  else { pctEl.innerHTML = (loaded / 1048576).toFixed(1) + '&nbsp;MB'; }
+}
+function loadError(msg) { console.error(msg); const e = document.getElementById('err'); e.style.display = 'block'; e.textContent = msg; }
 
-    // Matterport-Texturen sind fotografisch "gebacken" (Licht steckt schon im
-    // Bild). Daher: UNBELEUCHTETE (MeshBasic) + DOPPELSEITIGE Materialien.
-    // -> jede Fläche zeigt ihr Foto in voller Helligkeit, keine schwarzen
-    //    Stellen durch Beleuchtung oder Backface-Culling.
-    model.traverse((o) => {
-      if (!o.isMesh) return;
-      o.frustumCulled = true;
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      const converted = mats.map((m) => {
-        if (!m) return m;
-        const map = m.map || null;
-        if (map) map.colorSpace = THREE.SRGBColorSpace;
-        const basic = new THREE.MeshBasicMaterial({
-          map,
-          color: map ? 0xffffff : (m.color || new THREE.Color(0xcccccc)),
-          side: THREE.DoubleSide,
-        });
-        m.dispose?.();
-        return basic;
-      });
-      o.material = Array.isArray(o.material) ? converted : converted[0];
+// Unbeleuchtete, doppelseitige Materialien (Matterport: Licht ist gebacken)
+function applyUnlit(root) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.frustumCulled = true;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const conv = mats.map((m) => {
+      if (!m) return m;
+      const map = m.map || null;
+      if (map) map.colorSpace = THREE.SRGBColorSpace;
+      const b = new THREE.MeshBasicMaterial({ map, color: map ? 0xffffff : (m.color || new THREE.Color(0xcccccc)), side: THREE.DoubleSide });
+      m.dispose?.();
+      return b;
     });
+    o.material = Array.isArray(o.material) ? conv : conv[0];
+  });
+}
 
-    scene.add(model);
+// Einfaches Daylight-Modell (Himmel + Sonne) für Rhino/CAD
+function addDaylight() {
+  scene.children.filter((o) => o.name === 'baselight').forEach((o) => scene.remove(o));
+  scene.background = new THREE.Color(0xdfe7ef);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  const hemi = new THREE.HemisphereLight(0xdfeaff, 0x9a8f80, 1.2);
+  const sun = new THREE.DirectionalLight(0xfff3e2, 2.4); sun.position.set(8, 16, 6);
+  const fill = new THREE.DirectionalLight(0xbfd4ff, 0.5); fill.position.set(-10, 6, -8);
+  scene.add(hemi, sun, fill);
+}
 
-    // Bounding-Box -> Kamera sinnvoll platzieren
-    const box = new THREE.Box3().setFromObject(model);
-    box.getCenter(modelCenter);
-    const size = box.getSize(new THREE.Vector3());
-    modelRadius = Math.max(size.x, size.y, size.z) * 0.5;
+function finishLoad(root) {
+  model = root;
+  model.updateMatrixWorld(true);
+  scene.add(model);
+  const box = new THREE.Box3().setFromObject(model);
+  box.getCenter(modelCenter);
+  const size = box.getSize(new THREE.Vector3());
+  modelRadius = Math.max(size.x, size.y, size.z) * 0.5 || 5;
+  const eyeHeight = box.min.y + Math.min(1.7, size.y * 0.5);
+  home.pos.set(modelCenter.x + modelRadius * 0.85, eyeHeight + modelRadius * 0.45, modelCenter.z + modelRadius * 0.85);
+  home.target.set(modelCenter.x, eyeHeight, modelCenter.z);
+  baseSpeed = Math.max(0.6, modelRadius * 0.12);
+  camera.near = Math.max(0.01, modelRadius * 0.002);
+  camera.far = modelRadius * 60;
+  camera.updateProjectionMatrix();
+  resetView();
+  loaderEl.classList.add('hidden');
+  setTimeout(() => (loaderEl.style.display = 'none'), 700);
+  renderer.domElement.focus();
+  window.dispatchEvent(new CustomEvent('viewer-ready'));
+}
 
-    // Startposition: erhöhte 3/4-Übersicht von außen, Blick zur Mitte.
-    // Zuverlässig schön; von hier fliegt man mit WASD in die Räume.
-    const eyeHeight = box.min.y + Math.min(1.7, size.y * 0.5);
-    home.pos.set(modelCenter.x + modelRadius * 0.85, eyeHeight + modelRadius * 0.45, modelCenter.z + modelRadius * 0.85);
-    home.target.set(modelCenter.x, eyeHeight, modelCenter.z);
+// --- Standard-GLB / Matterport-GLB ---
+const draco = new DRACOLoader();
+draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
+const gltfLoader = new GLTFLoader(); gltfLoader.setDRACOLoader(draco);
+function loadGLB(url) {
+  gltfLoader.load(url, (g) => { const r = g.scene; r.rotateX(-Math.PI / 2); applyUnlit(r); finishLoad(r); },
+    (x) => setProgress(x.loaded, x.lengthComputable ? x.total : 0),
+    () => loadError('Fehler beim Laden des Modells. Bitte über HTTPS öffnen, nicht per Doppelklick.'));
+}
 
-    baseSpeed = Math.max(0.6, modelRadius * 0.12);
-    camera.far = modelRadius * 40;
-    camera.updateProjectionMatrix();
+// --- Matterport-ZIP (OBJ + Texturen direkt im Browser) ---
+const baseName = (p) => p.split(/[\\/]/).pop().toLowerCase();
+async function loadMatterportZip(url) {
+  try {
+    if (subEl) subEl.textContent = 'Lade & entpacke Scan …';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const total = +res.headers.get('content-length') || 0;
+    const reader = res.body.getReader(); const chunks = []; let loaded = 0;
+    for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); loaded += value.length; setProgress(loaded, total); }
+    const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm')).default;
+    const zip = await JSZip.loadAsync(await new Blob(chunks).arrayBuffer());
+    const files = Object.values(zip.files).filter((f) => !f.dir);
+    const objFile = files.find((f) => f.name.toLowerCase().endsWith('.obj'));
+    const mtlFile = files.find((f) => f.name.toLowerCase().endsWith('.mtl'));
+    if (!objFile) throw new Error('Keine .obj-Datei im ZIP gefunden.');
+    if (subEl) subEl.textContent = 'Lade Texturen …';
+    const texUrls = {};
+    for (const f of files) if (/\.(jpe?g|png)$/i.test(f.name)) texUrls[baseName(f.name)] = URL.createObjectURL(await f.async('blob'));
+    const manager = new THREE.LoadingManager();
+    manager.setURLModifier((u) => texUrls[baseName(u)] || u);
+    let materials = null;
+    if (mtlFile) { const mtl = new MTLLoader(manager).parse(await mtlFile.async('text'), ''); mtl.preload(); materials = mtl; }
+    const objLoader = new OBJLoader(manager);
+    if (materials) objLoader.setMaterials(materials);
+    const root = objLoader.parse(await objFile.async('text'));
+    root.rotateX(-Math.PI / 2);
+    applyUnlit(root);
+    finishLoad(root);
+  } catch (e) { loadError('Matterport-ZIP konnte nicht geladen werden: ' + e.message); }
+}
 
-    resetView();
+// --- Rhino .3dm ---
+function loadRhino(url, has2d) {
+  if (subEl) subEl.textContent = 'Lade Rhino-Modell …';
+  addDaylight();
+  const rl = new Rhino3dmLoader();
+  rl.setLibraryPath('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/');
+  rl.load(url, (root) => {
+    root.rotateX(-Math.PI / 2);
+    if (has2d) splitByScanLayer(root);
+    finishLoad(root);
+    if (has2d && scanGroup) setupScanSwitch();
+  }, (x) => setProgress(x.loaded, x.lengthComputable ? x.total : 0),
+     () => loadError('Rhino-Datei (.3dm) konnte nicht geladen werden.'));
+}
 
-    loaderEl.classList.add('hidden');
-    setTimeout(() => (loaderEl.style.display = 'none'), 700);
-    renderer.domElement.focus();
+function rhinoLayerName(obj, layers) {
+  const idx = obj.userData && obj.userData.attributes ? obj.userData.attributes.layerIndex : null;
+  if (idx == null || !layers || !layers[idx]) return null;
+  const l = layers[idx];
+  return typeof l === 'string' ? l : (l.name || null);
+}
+function splitByScanLayer(root) {
+  const layers = (root.userData && (root.userData.layers
+    || (root.userData.document && root.userData.document.layers))) || null;
+  scanGroup = new THREE.Group(); cadGroup = new THREE.Group();
+  const sc = [], cd = [];
+  root.traverse((o) => {
+    if (!o.isMesh && !o.isLine && !o.isPoints) return;
+    const n = rhinoLayerName(o, layers);
+    (n && String(n).trim().toLowerCase() === '2d_scan' ? sc : cd).push(o);
+  });
+  sc.forEach((o) => scanGroup.attach(o));
+  cd.forEach((o) => cadGroup.attach(o));
+  root.add(scanGroup, cadGroup);
+  cadGroup.visible = true; scanGroup.visible = false;     // Standard: CAD-Ansicht
+  if (scanGroup.children.length === 0) scanGroup = null;   // kein Scan erkennbar -> kein Switch
+}
+function setupScanSwitch() {
+  const topbar = document.getElementById('topbar');
+  const sep = document.createElement('div'); sep.className = 'sep';
+  const seg = document.createElement('div'); seg.className = 'seg'; seg.id = 'scan-switch';
+  const ICN_CAD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"/><path d="M3.7 7.3l8.3 4.7 8.3-4.7M12 12v9.5"/></svg>`;
+  const ICN_SCAN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l1.4-2h7.2L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.4"/></svg>`;
+  seg.innerHTML = `<button class="btn active" data-v="cad" data-tip="3D-Modell (CAD)" aria-label="CAD">${ICN_CAD}<span>CAD</span></button>
+                   <button class="btn" data-v="scan" data-tip="3D-Scan" aria-label="Scan">${ICN_SCAN}<span>Scan</span></button>`;
+  topbar.append(sep, seg);
+  seg.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    const scan = b.dataset.v === 'scan';
+    scanGroup.visible = scan; cadGroup.visible = !scan;
+    seg.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+  }));
+}
 
-    // Kommentar-Modul informieren, dass Modell & API bereit sind
-    window.dispatchEvent(new CustomEvent('viewer-ready'));
-  },
-  (xhr) => {
-    if (xhr.lengthComputable) {
-      const p = Math.min(100, Math.round((xhr.loaded / xhr.total) * 100));
-      barfill.style.width = p + '%';
-      pctEl.innerHTML = p + '&nbsp;%';
-    } else {
-      pctEl.innerHTML = (xhr.loaded / 1048576).toFixed(1) + '&nbsp;MB';
-    }
-  },
-  (err) => {
-    console.error(err);
-    const e = document.getElementById('err');
-    e.style.display = 'block';
-    e.textContent = 'Fehler beim Laden des Modells (model.glb). Bitte über einen Webserver/HTTPS öffnen, nicht per Doppelklick.';
-  }
-);
+// --- Entscheiden, was geladen wird ---
+function startLoad() {
+  const pid = window.PROJECT_ID;
+  if (!pid) { loadGLB('./model.glb'); return; }   // Standard-Projekt (Prinzenstraße)
+  fetch(`${window.SUPABASE_URL}/rest/v1/projects?id=eq.${pid}&select=*`, {
+    headers: { apikey: window.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + window.SUPABASE_ANON_KEY },
+  }).then((r) => r.json()).then((rows) => {
+    const p = rows && rows[0];
+    if (!p) { loadError('Projekt nicht gefunden.'); return; }
+    document.title = p.name + ' · 3D Rundgang';
+    const url = window.STORAGE_BASE + p.file_path;
+    if (p.type === 'rhino') loadRhino(url, !!p.has_2d_scan);
+    else loadMatterportZip(url);
+  }).catch((e) => loadError('Projekt konnte nicht geladen werden: ' + e.message));
+}
+startLoad();
 
 // ---------------------------------------------------------------------------
 //  Orbit-Controls (für "Umkreisen"-Modus)
