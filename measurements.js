@@ -19,19 +19,21 @@ css.textContent = `
   #meas-labels { position: fixed; inset: 0; z-index: 17; pointer-events: none; overflow: hidden; }
   .meas-label {
     position: absolute; transform: translate(-50%, -50%); pointer-events: auto;
-    background: rgba(0,150,170,.95); color: #fff; border: 1px solid rgba(255,255,255,.5);
-    border-radius: 7px; padding: 3px 6px 3px 9px; font: 600 12.5px -apple-system,"Segoe UI",Roboto,sans-serif;
-    white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.4); display: flex; align-items: center; gap: 6px;
+    background: rgba(20,20,22,.78); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    color: #fff; border: 1px solid rgba(100,210,255,.55);
+    border-radius: 8px; padding: 3px 7px 3px 10px; font: 600 12.5px var(--font); font-variant-numeric: tabular-nums;
+    white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.45); display: flex; align-items: center; gap: 7px;
     user-select: none; will-change: left, top;
   }
-  .meas-label .del { cursor: pointer; color: rgba(255,255,255,.8); font-size: 14px; line-height: 1;
-    border-left: 1px solid rgba(255,255,255,.35); padding-left: 6px; }
-  .meas-label .del:hover { color: #ffd2d2; }
-  .meas-label.preview { background: rgba(40,48,58,.92); border-style: dashed; }
+  .meas-label .del { cursor: pointer; color: var(--label3); font-size: 15px; line-height: 1;
+    border-left: 1px solid rgba(255,255,255,.18); padding-left: 7px; transition: color .15s; }
+  .meas-label .del:hover { color: var(--red); }
+  .meas-label.preview { background: rgba(20,20,22,.7); border-style: dashed; border-color: rgba(255,255,255,.4); }
   body.meas-measuring #app, body.meas-measuring canvas { cursor: crosshair !important; }
-  #meas-hint { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 25;
-    background: rgba(0,150,170,.96); color: #fff; padding: 8px 16px; border-radius: 20px; font: 13px -apple-system,"Segoe UI",Roboto,sans-serif;
-    box-shadow: 0 4px 16px rgba(0,0,0,.4); display: none; pointer-events: none; }
+  #meas-hint { position: fixed; top: 68px; left: 50%; transform: translateX(-50%); z-index: 25;
+    background: rgba(100,210,255,.92); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    color: #04222b; padding: 9px 18px; border-radius: var(--pill); font: 600 13px var(--font);
+    box-shadow: var(--shadow); display: none; pointer-events: none; }
   body.meas-measuring #meas-hint { display: block; }
 `;
 document.head.appendChild(css);
@@ -39,7 +41,8 @@ document.head.appendChild(css);
 const topbar = document.getElementById('topbar');
 const btnMeasure = document.createElement('button');
 btnMeasure.className = 'btn';
-btnMeasure.textContent = '📏 Messen';
+btnMeasure.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8" width="19" height="8" rx="1.6"/><path d="M7 8v3M11 8v4.2M15 8v3M19 8v4.2"/></svg><span>Messen</span>`;
+btnMeasure.title = 'Strecke im Modell messen';
 topbar.appendChild(btnMeasure);
 
 const labelsEl = document.createElement('div');

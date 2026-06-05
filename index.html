@@ -6,72 +6,103 @@
   <title>Prinzenstraße 85 – 3D Rundgang</title>
   <link rel="icon" href="data:," />
   <style>
-    :root { --accent: #4ea1ff; }
+    /* ---- Apple-HIG inspirierte Design-Tokens (Dark) ---- */
+    :root {
+      --blue:#0A84FF; --green:#30D158; --red:#FF453A; --yellow:#FFD60A; --teal:#64D2FF;
+      --label:rgba(255,255,255,.96); --label2:rgba(235,235,245,.62); --label3:rgba(235,235,245,.32);
+      --mat:rgba(30,30,33,.62); --mat-2:rgba(36,36,40,.78); --mat-solid:#1c1c1e;
+      --hairline:rgba(255,255,255,.14); --hairline-soft:rgba(255,255,255,.08);
+      --radius:12px; --radius-lg:16px; --pill:980px;
+      --shadow:0 10px 34px rgba(0,0,0,.46), 0 2px 8px rgba(0,0,0,.30);
+      --blur:saturate(180%) blur(22px);
+      --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      --accent:var(--blue);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0d10; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
+      font-family: var(--font); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
     #app { position: fixed; inset: 0; }
     canvas { display: block; outline: none; }
 
     /* Ladebildschirm */
     #loader {
       position: fixed; inset: 0; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 22px;
-      background: radial-gradient(circle at 50% 40%, #161a20, #0b0d10); z-index: 50;
-      color: #e8edf2; transition: opacity .6s ease; text-align: center; padding: 24px;
+      align-items: center; justify-content: center; gap: 20px;
+      background: radial-gradient(120% 90% at 50% 32%, #1b1c1f 0%, #050506 70%); z-index: 50;
+      color: var(--label); transition: opacity .6s ease; text-align: center; padding: 24px;
     }
     #loader.hidden { opacity: 0; pointer-events: none; }
-    #loader h1 { font-size: 19px; font-weight: 600; letter-spacing: .3px; }
-    #loader .sub { font-size: 13px; color: #8a94a0; margin-top: -10px; }
-    .bar { width: min(320px, 70vw); height: 5px; background: #232a33; border-radius: 4px; overflow: hidden; }
-    .bar > i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width .25s ease; }
-    #pct { font-size: 12px; color: #8a94a0; font-variant-numeric: tabular-nums; }
+    #loader h1 { font-size: 21px; font-weight: 600; letter-spacing: .2px; }
+    #loader .sub { font-size: 13px; color: var(--label2); margin-top: -8px; }
+    .bar { width: min(300px, 72vw); height: 4px; background: rgba(255,255,255,.12); border-radius: 99px; overflow: hidden; }
+    .bar > i { display: block; height: 100%; width: 0%; background: var(--blue); border-radius: 99px;
+      box-shadow: 0 0 14px rgba(10,132,255,.6); transition: width .25s ease; }
+    #pct { font-size: 12px; color: var(--label2); font-variant-numeric: tabular-nums; letter-spacing: .3px; }
 
-    /* HUD */
+    /* HUD (Steuerungs-Hilfe) */
     #hud {
       position: fixed; left: 16px; bottom: 16px; z-index: 20;
-      background: rgba(16,19,24,.82); backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
-      padding: 12px 14px; color: #cdd5de; font-size: 12.5px; line-height: 1.65;
-      max-width: 260px; user-select: none; transition: opacity .3s;
+      background: var(--mat); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+      border: 1px solid var(--hairline); border-radius: var(--radius-lg);
+      padding: 13px 15px; color: var(--label2); font-size: 13px; line-height: 1.7;
+      max-width: 270px; user-select: none; transition: opacity .3s; box-shadow: var(--shadow);
     }
-    #hud b { color: #fff; }
-    #hud .key { display: inline-block; min-width: 16px; text-align: center;
-      padding: 1px 6px; margin: 0 1px; background: #2a323d; border-radius: 5px;
-      border: 1px solid rgba(255,255,255,.08); font-family: ui-monospace, monospace; font-size: 11px; color: #e8edf2; }
-    #hud .hint { color: #828c97; margin-top: 6px; font-size: 11.5px; }
+    #hud b { color: var(--label); font-weight: 600; }
+    #hud .key { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px;
+      padding: 0 6px; margin: 0 1px; background: linear-gradient(#3a3a3d,#2c2c2e);
+      border: 1px solid rgba(255,255,255,.1); border-bottom-color: rgba(0,0,0,.45);
+      border-radius: 6px; box-shadow: 0 1px 0 rgba(0,0,0,.4); font: 600 11px var(--font); color: var(--label); }
+    #hud .hint { color: var(--label3); margin-top: 8px; font-size: 11.5px; }
     #hud.collapsed .body { display: none; }
-    #hud .title { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; font-weight: 600; color: #fff; }
-    #hud .toggle { color: #7b8590; font-size: 11px; }
+    #hud .title { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer;
+      font-weight: 600; color: var(--label); font-size: 13px; }
+    #hud .toggle { color: var(--label3); font-size: 11px; font-weight: 500; }
 
-    /* Top bar */
+    /* Toolbar (schwebende Glas-Kapsel) */
     #topbar {
       position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 20;
-      display: flex; gap: 8px; align-items: center;
+      display: flex; align-items: center; gap: 3px; flex-wrap: wrap; justify-content: center;
+      max-width: calc(100vw - 20px); padding: 5px;
+      background: var(--mat); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+      border: 1px solid var(--hairline); border-radius: 18px; box-shadow: var(--shadow);
     }
     .btn {
-      background: rgba(16,19,24,.82); backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
-      color: #cdd5de; font-size: 12.5px; padding: 8px 13px; cursor: pointer;
-      transition: background .15s, color .15s; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 7px; background: transparent; border: 0;
+      color: var(--label2); font: 500 13px/1 var(--font); letter-spacing: .1px;
+      padding: 8px 12px; border-radius: 10px; cursor: pointer; white-space: nowrap;
+      transition: background .18s, color .18s, transform .08s;
     }
-    .btn:hover { background: rgba(40,48,58,.9); color: #fff; }
-    .btn.active { border-color: var(--accent); color: #fff; }
+    .btn:hover { background: rgba(255,255,255,.08); color: var(--label); }
+    .btn:active { transform: scale(.96); }
+    .btn.active { background: rgba(10,132,255,.18); color: #4aa3ff; }
+    .btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
+    .sep { width: 1px; align-self: stretch; margin: 5px 3px; background: var(--hairline-soft); }
+    /* Segmented Control (Navigationsmodus) */
+    .seg { display: flex; gap: 2px; padding: 2px; background: rgba(118,118,128,.22); border-radius: 11px; }
+    .seg .btn { padding: 7px 11px; border-radius: 9px; }
+    .seg .btn:hover { background: rgba(255,255,255,.06); }
+    .seg .btn.active { background: rgba(120,120,128,.5); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
 
-    /* Speed-Anzeige */
+    /* Tempo-Anzeige */
     #speedbadge {
       position: fixed; right: 16px; bottom: 16px; z-index: 20;
-      background: rgba(16,19,24,.82); backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
-      color: #cdd5de; font-size: 12px; padding: 7px 12px; user-select: none;
-      font-variant-numeric: tabular-nums;
+      background: var(--mat); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+      border: 1px solid var(--hairline); border-radius: 12px;
+      color: var(--label2); font: 500 12px var(--font); padding: 8px 12px; user-select: none;
+      font-variant-numeric: tabular-nums; box-shadow: var(--shadow);
     }
+    #speedbadge b { color: var(--label); }
     #crosshair {
-      position: fixed; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
-      border-radius: 50%; background: rgba(255,255,255,.55); z-index: 15; pointer-events: none;
-      opacity: 0; transition: opacity .15s;
+      position: fixed; top: 50%; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+      border: 1.5px solid rgba(255,255,255,.75); border-radius: 50%; z-index: 15; pointer-events: none;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.35); opacity: 0; transition: opacity .15s;
     }
+    #crosshair::after { content: ""; position: absolute; inset: 0; margin: auto; width: 2px; height: 2px;
+      background: rgba(255,255,255,.9); border-radius: 50%; }
     body.looking #crosshair { opacity: 1; }
-    #err { position: fixed; inset: auto 0 0 0; background:#7a1f1f; color:#fff; padding:10px 14px; font-size:13px; z-index:60; display:none; }
+    #err { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; max-width: 92vw;
+      background: rgba(255,69,58,.92); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+      color: #fff; padding: 11px 16px; font-size: 13px; border-radius: 12px; z-index: 60; display: none; box-shadow: var(--shadow); }
   </style>
 </head>
 <body>
@@ -86,9 +117,21 @@
   </div>
 
   <div id="topbar">
-    <button class="btn active" id="mode-walk" title="Frei fliegen mit WASD + rechter Maustaste">Fliegen (WASD)</button>
-    <button class="btn" id="mode-orbit" title="Modell umkreisen">Umkreisen</button>
-    <button class="btn" id="btn-reset" title="Ansicht zurücksetzen">Reset</button>
+    <div class="seg">
+      <button class="btn active" id="mode-walk" title="Frei fliegen mit WASD + Maus/Pfeiltasten">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><path d="M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>
+        <span>Fliegen</span>
+      </button>
+      <button class="btn" id="mode-orbit" title="Modell umkreisen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10" ry="4.5"/><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/></svg>
+        <span>Umkreisen</span>
+      </button>
+    </div>
+    <div class="sep"></div>
+    <button class="btn" id="btn-reset" title="Ansicht zurücksetzen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v4h4"/></svg>
+      <span>Reset</span>
+    </button>
   </div>
 
   <div id="hud">
@@ -123,11 +166,11 @@
   </script>
   <!-- ?v=… = Cache-Busting: bei jeder Code-Änderung die Zahl erhöhen,
        damit Browser garantiert die neue Version laden (kein veralteter Cache). -->
-  <script src="./config.js?v=4"></script>
-  <script type="module" src="./main.js?v=4"></script>
-  <script type="module" src="./comments.js?v=4"></script>
-  <script type="module" src="./measurements.js?v=4"></script>
-  <script type="module" src="./chat.js?v=4"></script>
-  <script type="module" src="./bookmarks.js?v=4"></script>
+  <script src="./config.js?v=5"></script>
+  <script type="module" src="./main.js?v=5"></script>
+  <script type="module" src="./comments.js?v=5"></script>
+  <script type="module" src="./measurements.js?v=5"></script>
+  <script type="module" src="./chat.js?v=5"></script>
+  <script type="module" src="./bookmarks.js?v=5"></script>
 </body>
 </html>

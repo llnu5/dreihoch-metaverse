@@ -42,6 +42,20 @@ css.textContent = `
   #chat-send { background:#3b82f6; border:0; color:#fff; border-radius:8px; padding:0 13px; height:38px; cursor:pointer; font:600 13px inherit; }
   #chat-send:hover { background:#2f6fe0; }
   @media (max-width:560px){ #chat-panel{ top:84px; } }
+  /* === Apple-HIG Redesign-Overrides === */
+  #chat-panel { background:var(--mat-2); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+    border:1px solid var(--hairline); border-right:0; border-radius:18px 0 0 18px; box-shadow:var(--shadow); font-family:var(--font); }
+  #chat-hd { padding:13px 15px; border-bottom:1px solid var(--hairline-soft); }
+  #chat-hd h2 { font-size:15px; font-weight:700; }
+  #chat-hd .min { color:var(--label3); } #chat-hd .min:hover { color:var(--label); }
+  .chat-m .when { color:var(--label3); } .chat-m .body { color:var(--label2); }
+  .chat-m .del { color:var(--label3); } .chat-m .del:hover { color:var(--red); }
+  #chat-empty { color:var(--label3); }
+  #chat-foot { padding:11px 12px; border-top:1px solid var(--hairline-soft); }
+  #chat-foot textarea { background:rgba(0,0,0,.3); border:1px solid var(--hairline); border-radius:10px; color:var(--label); }
+  #chat-foot textarea:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(10,132,255,.2); }
+  #chat-send { background:var(--blue); border-radius:10px; font-weight:600; transition:background .15s, transform .08s; }
+  #chat-send:hover { background:#0a76e6; } #chat-send:active { transform:scale(.96); }
 `;
 document.head.appendChild(css);
 
@@ -51,7 +65,8 @@ document.head.appendChild(css);
 const topbar = document.getElementById('topbar');
 const btnChat = document.createElement('button');
 btnChat.className = 'btn';
-btnChat.textContent = '💬 Chat';
+btnChat.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg><span>Chat</span>`;
+btnChat.title = 'Chat öffnen';
 topbar.appendChild(btnChat);
 
 const panel = document.createElement('div');

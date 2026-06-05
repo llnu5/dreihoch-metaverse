@@ -43,6 +43,24 @@ css.textContent = `
   .bm-item .del { cursor:pointer; color:#6b7480; font-size:15px; padding:4px 7px; }
   .bm-item .del:hover { color:#ff7676; }
   #bm-empty { color:#7b8590; font-size:12.5px; text-align:center; padding:14px 8px; line-height:1.5; }
+  /* === Apple-HIG Redesign-Overrides === */
+  #bm-panel { background:var(--mat-2); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+    border:1px solid var(--hairline); border-left:0; border-radius:0 18px 18px 0; box-shadow:var(--shadow); font-family:var(--font); }
+  #bm-hd { padding:13px 15px; border-bottom:1px solid var(--hairline-soft); }
+  #bm-hd h2 { font-size:15px; font-weight:700; }
+  #bm-hd .min { color:var(--label3); } #bm-hd .min:hover { color:var(--label); }
+  #bm-new { margin:11px 12px 7px; background:var(--blue); border-radius:10px; font-weight:600; transition:background .15s, transform .08s; }
+  #bm-new:hover { background:#0a76e6; } #bm-new:active { transform:scale(.98); }
+  #bm-form input { background:rgba(0,0,0,.3); border:1px solid var(--hairline); border-radius:10px; }
+  #bm-form input:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(10,132,255,.2); }
+  #bm-form button { border-radius:9px; font-weight:600; }
+  #bm-save { background:var(--blue); } #bm-save:hover { background:#0a76e6; }
+  #bm-cancel { background:rgba(118,118,128,.24); color:var(--label2); } #bm-cancel:hover { background:rgba(118,118,128,.4); }
+  .bm-item { background:rgba(255,255,255,.05); border:1px solid var(--hairline-soft); border-radius:11px; transition:background .15s; }
+  .bm-item:hover { background:rgba(255,255,255,.09); }
+  .bm-item .go { color:var(--label); border-radius:11px; } .bm-item .go:hover { background:rgba(10,132,255,.16); color:#fff; }
+  .bm-item .del:hover { color:var(--red); }
+  #bm-empty { color:var(--label3); }
 `;
 document.head.appendChild(css);
 
@@ -52,7 +70,8 @@ document.head.appendChild(css);
 const topbar = document.getElementById('topbar');
 const btnBm = document.createElement('button');
 btnBm.className = 'btn';
-btnBm.textContent = '🔖 Bookmarks';
+btnBm.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4-7 4V4.5a1 1 0 0 1 1-1z"/></svg><span>Bookmarks</span>`;
+btnBm.title = 'Gespeicherte Ansichten';
 topbar.appendChild(btnBm);
 
 const panel = document.createElement('div');

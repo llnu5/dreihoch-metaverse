@@ -138,8 +138,54 @@ css.textContent = `
   #cmt-modal input:focus { border-color:#3b82f6; }
 
   @media (max-width: 560px) {
-    .cmt-card { width: calc(100vw - 20px); }
+    .cmt-card { width: calc(100vw - 24px); }
   }
+  /* === Apple-HIG Redesign-Overrides === */
+  .cmt-pin .bubble { border-radius: 50% 50% 50% 3px; border: 2px solid rgba(255,255,255,.92); }
+  .cmt-pin.resolved .bubble { background: var(--green); }
+  .cmt-pin.active .bubble { box-shadow: 0 0 0 3px rgba(10,132,255,.9); }
+  .cmt-pin .cnt { background:#2c2c2e; border:1.5px solid rgba(255,255,255,.3); }
+  .cmt-card { background: var(--mat-2); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    border:1px solid var(--hairline); border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow:hidden; font-family:var(--font); }
+  .cmt-card .hd { padding:11px 14px; border-bottom:1px solid var(--hairline-soft); }
+  .cmt-card .x { color:var(--label3); } .cmt-card .x:hover { color:var(--label); }
+  .cmt-msgs { padding:4px 14px; } .cmt-msg { padding:10px 0; border-bottom:1px solid var(--hairline-soft); }
+  .cmt-msg .who { color:var(--label); } .cmt-msg .when { color:var(--label3); } .cmt-msg .txt { color:var(--label2); line-height:1.5; }
+  .cmt-msg .del:hover { color:var(--red); }
+  .cmt-foot { padding:11px 14px; border-top:1px solid var(--hairline-soft); }
+  .cmt-card textarea { background:rgba(0,0,0,.3); border:1px solid var(--hairline); border-radius:10px; color:var(--label); padding:9px 11px; }
+  .cmt-card textarea:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(10,132,255,.2); }
+  .cmt-btn { background:rgba(118,118,128,.24); border:0; color:var(--label); border-radius:9px; padding:8px 14px; font-weight:600; transition:background .15s, transform .08s; }
+  .cmt-btn:hover { background:rgba(118,118,128,.4); } .cmt-btn:active { transform:scale(.96); }
+  .cmt-btn.primary { background:var(--blue); color:#fff; } .cmt-btn.primary:hover { background:#0a76e6; }
+  .cmt-btn.good { background:var(--green); color:#04210f; } .cmt-btn.good:hover { background:#2bbd50; }
+  .cmt-btn.ghost { background:transparent; color:var(--label2); } .cmt-btn.ghost:hover { background:rgba(255,255,255,.08); color:var(--label); }
+  #cmt-sidebar { background:var(--mat-2); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+    border-left:1px solid var(--hairline); width:330px; transition:transform .3s cubic-bezier(.32,.72,0,1); box-shadow:-12px 0 40px rgba(0,0,0,.4); }
+  #cmt-sidebar .sb-hd { padding:16px 16px 12px; }
+  #cmt-sidebar h2 { font-size:17px; font-weight:700; }
+  #cmt-filter { gap:2px; padding:2px; background:rgba(118,118,128,.22); border-radius:10px; }
+  #cmt-filter button { background:transparent; border:0; color:var(--label2); border-radius:8px; }
+  #cmt-filter button.on { background:rgba(120,120,128,.5); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .cmt-item { background:rgba(255,255,255,.05); border:1px solid var(--hairline-soft); border-radius:12px; transition:background .15s, transform .08s; }
+  .cmt-item:hover { background:rgba(255,255,255,.09); border-color:var(--hairline-soft); }
+  .cmt-item:active { transform:scale(.985); }
+  .cmt-item .who { color:var(--label); } .cmt-item .when { color:var(--label3); } .cmt-item .snip { color:var(--label2); }
+  .cmt-item .meta { color:var(--label3); } .cmt-item .badge { color:var(--green); }
+  .cmt-item.resolved .av { background:var(--green); }
+  #cmt-empty { color:var(--label3); }
+  #cmt-name { background:var(--mat); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+    border:1px solid var(--hairline); border-radius:var(--pill); color:var(--label2); padding:6px 12px 6px 7px; gap:8px; box-shadow:var(--shadow); }
+  #cmt-name:hover { color:var(--label); }
+  #cmt-name .av { width:22px; height:22px; background:var(--blue); }
+  #cmt-hint { top:68px; background:rgba(10,132,255,.92); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+    padding:9px 18px; border-radius:var(--pill); font-weight:500; box-shadow:var(--shadow); }
+  #cmt-modal { background:rgba(0,0,0,.5); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+  #cmt-modal .box { background:var(--mat-2); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+    border:1px solid var(--hairline); border-radius:20px; box-shadow:0 24px 70px rgba(0,0,0,.6); }
+  #cmt-modal h3 { font-size:18px; font-weight:700; } #cmt-modal p { color:var(--label2); }
+  #cmt-modal input { background:rgba(0,0,0,.3); border:1px solid var(--hairline); border-radius:10px; }
+  #cmt-modal input:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(10,132,255,.25); }
 `;
 document.head.appendChild(css);
 
@@ -147,8 +193,12 @@ document.head.appendChild(css);
 //  DOM aufbauen
 // ---------------------------------------------------------------------------
 const topbar = document.getElementById('topbar');
-const btnAdd = el('button', 'btn', '💬 Kommentar setzen');
-const btnList = el('button', 'btn', '📋 Liste');
+const btnAdd = el('button', 'btn');
+btnAdd.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.7-6.5-10.5A6.5 6.5 0 0 1 18.5 10.5C18.5 15.3 12 21 12 21z"/><circle cx="12" cy="10.2" r="2.4"/></svg><span>Kommentar</span>`;
+btnAdd.title = 'Kommentar im Modell setzen';
+const btnList = el('button', 'btn');
+btnList.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Liste</span>`;
+btnList.title = 'Kommentarliste';
 const sep = el('div', 'sep');
 topbar.append(sep, btnAdd, btnList);
 
