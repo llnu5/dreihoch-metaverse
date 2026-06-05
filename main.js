@@ -176,16 +176,37 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 
+const PITCH_LIMIT = Math.PI / 2 - 0.01;
+// zentraler Umsehen-Helfer (für Rechtsklick, Linksklick-Ziehen und Pfeiltasten)
+function applyLook(dYaw, dPitch) {
+  euler.setFromQuaternion(camera.quaternion);
+  euler.y -= dYaw;
+  euler.x -= dPitch;
+  euler.x = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, euler.x));
+  camera.quaternion.setFromEuler(euler);
+}
+
+// Rechtsklick (Pointer-Lock): umsehen über movementX/Y
 dom.addEventListener('mousemove', (e) => {
   if (!looking || mode !== 'walk') return;
-  const dx = e.movementX || 0;
-  const dy = e.movementY || 0;
-  euler.setFromQuaternion(camera.quaternion);
-  euler.y -= dx * 0.0022;
-  euler.x -= dy * 0.0022;
-  euler.x = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, euler.x));
-  camera.quaternion.setFromEuler(euler);
+  applyLook((e.movementX || 0) * 0.0022, (e.movementY || 0) * 0.0022);
 });
+
+// Linksklick gedrückt ziehen = umsehen (trackpad-/mausfrei-freundlich).
+// Nur im Fly-Modus und wenn kein Platzierungs-Werkzeug aktiv ist.
+let dragLook = null;
+dom.addEventListener('pointerdown', (e) => {
+  if (mode !== 'walk' || e.button !== 0) return;
+  if (document.body.classList.contains('cmt-placing') || document.body.classList.contains('meas-measuring')) return;
+  dragLook = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('pointermove', (e) => {
+  if (!dragLook) return;
+  const dx = e.clientX - dragLook.x, dy = e.clientY - dragLook.y;
+  dragLook.x = e.clientX; dragLook.y = e.clientY;
+  applyLook(dx * 0.004, dy * 0.004);
+});
+window.addEventListener('pointerup', () => { dragLook = null; });
 
 // Mausrad -> Tempo (im Fly-Modus). Orbit nutzt das Rad selbst zum Zoomen.
 dom.addEventListener('wheel', (e) => {
@@ -306,6 +327,19 @@ function flyTo(point) {
   if (mode === 'orbit') orbit.target.copy(point);
 }
 
+// Kamera-Pose (Position + Blickrichtung) erfassen / animiert anfliegen (Bookmarks)
+function getPose() {
+  return { pos: camera.position.clone(), quat: camera.quaternion.clone() };
+}
+function flyToPose(pos, quat, dur) {
+  setMode('walk');
+  tween = {
+    fromPos: camera.position.clone(), toPos: pos.clone(),
+    fromQuat: camera.quaternion.clone(), toQuat: quat.clone(),
+    target: null, t: 0, dur: dur || 1.2,
+  };
+}
+
 function updateTween(dt) {
   tween.t += dt / tween.dur;
   const x = Math.min(1, tween.t);
@@ -321,7 +355,7 @@ window.viewer = {
   getModel: () => model,
   isWalkMode: () => mode === 'walk',
   isLooking: () => looking,
-  raycastModel, worldToScreen, isOccluded, flyTo,
+  raycastModel, worldToScreen, isOccluded, flyTo, flyToPose, getPose,
   addFrameCallback: (fn) => { frameCallbacks.push(fn); },
   setFrameCallback: (fn) => { frameCallbacks.push(fn); }, // additiv (Rückwärtskompatibilität)
 };
@@ -345,14 +379,23 @@ function animate() {
     if (keys['ShiftLeft'] || keys['ShiftRight']) speed *= 3.0;
     if (keys['ControlLeft'] || keys['ControlRight']) speed *= 0.3;
 
+    // Pfeiltasten = umsehen (tastaturfreundlich, ohne Maus)
+    const lr = 1.6 * dt;
+    let dYaw = 0, dPitch = 0;
+    if (keys['ArrowLeft']) dYaw -= lr;
+    if (keys['ArrowRight']) dYaw += lr;
+    if (keys['ArrowUp']) dPitch -= lr;
+    if (keys['ArrowDown']) dPitch += lr;
+    if (dYaw || dPitch) applyLook(dYaw, dPitch);
+
     camera.getWorldDirection(fwd);
     right.crossVectors(fwd, up).normalize();
     move.set(0, 0, 0);
 
-    if (keys['KeyW'] || keys['ArrowUp']) move.add(fwd);
-    if (keys['KeyS'] || keys['ArrowDown']) move.sub(fwd);
-    if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
-    if (keys['KeyA'] || keys['ArrowLeft']) move.sub(right);
+    if (keys['KeyW']) move.add(fwd);
+    if (keys['KeyS']) move.sub(fwd);
+    if (keys['KeyD']) move.add(right);
+    if (keys['KeyA']) move.sub(right);
     if (keys['KeyE'] || keys['Space']) move.add(up);
     if (keys['KeyQ']) move.sub(up);
 

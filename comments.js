@@ -209,6 +209,13 @@ function el(tag, cls, text) {
   return e;
 }
 function initial(n) { return (n || '?').trim().charAt(0).toUpperCase() || '?'; }
+// Name -> feste, gut unterscheidbare Farbe (gleicher Name = gleiche Farbe für alle)
+function colorFor(n) {
+  const s = (n || 'Gast').trim().toLowerCase();
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return `hsl(${h}, 68%, 60%)`;
+}
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function timeAgo(iso) {
   const s = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -245,7 +252,7 @@ document.getElementById('cmt-name-input').addEventListener('keydown', (e) => {
 });
 
 function renderNameBadge() {
-  if (name) nameBadge.innerHTML = `<span class="av">${esc(initial(name))}</span><span>${esc(name)}</span>`;
+  if (name) nameBadge.innerHTML = `<span class="av" style="background:${colorFor(name)}">${esc(initial(name))}</span><span>${esc(name)}</span>`;
   else nameBadge.innerHTML = `<span class="av">?</span><span>Name festlegen</span>`;
 }
 nameBadge.addEventListener('click', async () => {
@@ -317,7 +324,7 @@ async function createThread(pos, body) {
   if (error) { alert('Konnte Kommentar nicht speichern: ' + error.message); return; }
   threads.set(data.id, toThread(data));
   syncPins(); renderList();
-  activeId = data.id; openThread(data.id);
+  // Eingabefeld bleibt geschlossen – der neue Pin ist gesetzt; Klick darauf öffnet den Thread.
 }
 async function addReply(threadId, body) {
   const { data, error } = await sb.from('comments')
@@ -371,6 +378,8 @@ function syncPins() {
     e.classList.toggle('resolved', t.resolved);
     e.classList.toggle('active', activeId === t.id);
     e.querySelector('.ini').textContent = initial(t.author);
+    // Pin-Farbe pro Nutzer (erledigte bleiben grün über CSS)
+    e.querySelector('.bubble').style.background = t.resolved ? '' : colorFor(t.author);
     const cnt = 1 + t.comments.length;
     const cE = e.querySelector('.cnt');
     cE.textContent = cnt; cE.style.display = cnt > 1 ? '' : 'none';
@@ -518,7 +527,7 @@ function renderList() {
     const it = el('div', 'cmt-item' + (t.resolved ? ' resolved' : ''));
     it.innerHTML = `
       <div class="it-top">
-        <span class="av">${esc(initial(t.author))}</span>
+        <span class="av" style="${t.resolved ? '' : 'background:' + colorFor(t.author)}">${esc(initial(t.author))}</span>
         <span class="who">${esc(t.author)}</span>
         <span class="when">${timeAgo(t.created_at)}</span>
       </div>
