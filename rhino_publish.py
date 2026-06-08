@@ -119,17 +119,31 @@ def layer_name_of(obj):
     try: return sc.doc.Layers[obj.Attributes.LayerIndex].Name
     except: return ''
 
-def meshes_of_geometry(geo):
+def meshes_of_object(obj):
+    """Bevorzugt das RENDER-Mesh (hat die korrekten Mapping-UVs gebacken, planar/box/custom)
+    -> Texturen sitzen wie in Rhino. Fallback: selbst vernetzen."""
     out = []
     try:
-        if isinstance(geo, Rhino.Geometry.Mesh):
-            out.append(geo.DuplicateMesh())
-        elif isinstance(geo, Rhino.Geometry.Brep):
-            ms = Rhino.Geometry.Mesh.CreateFromBrep(geo, Rhino.Geometry.MeshingParameters.Default)
+        g = obj.Geometry
+        if isinstance(g, Rhino.Geometry.Mesh):
+            out.append(g.DuplicateMesh()); return out      # Scan: gebackene UVs behalten
+        # Render-Mesh holen (ggf. erzeugen)
+        rm = obj.GetMeshes(Rhino.Geometry.MeshType.Render)
+        if not rm or len(rm) == 0:
+            try: obj.CreateMeshes(Rhino.Geometry.MeshType.Render, Rhino.Geometry.MeshingParameters.Default, False)
+            except: pass
+            rm = obj.GetMeshes(Rhino.Geometry.MeshType.Render)
+        if rm and len(rm) > 0:
+            for m in rm:
+                if m and m.Vertices.Count > 0: out.append(m.DuplicateMesh())
+            if out: return out
+        # Fallback: selbst vernetzen (rohe Oberflaechen-UVs)
+        if isinstance(g, Rhino.Geometry.Brep):
+            ms = Rhino.Geometry.Mesh.CreateFromBrep(g, Rhino.Geometry.MeshingParameters.Default)
             if ms:
                 for m in ms: out.append(m)
-        elif isinstance(geo, Rhino.Geometry.Extrusion):
-            br = geo.ToBrep(True)
+        elif isinstance(g, Rhino.Geometry.Extrusion):
+            br = g.ToBrep(True)
             if br:
                 ms = Rhino.Geometry.Mesh.CreateFromBrep(br, Rhino.Geometry.MeshingParameters.Default)
                 if ms:
@@ -163,7 +177,7 @@ def collect(raw):
         glass = is_glass_layer(lname); scan = is_scan_layer(lname)
         if not glass and not scan and is_hide_layer(lname):
             stats['hidden'] += 1; return
-        meshes = meshes_of_geometry(obj.Geometry)
+        meshes = meshes_of_object(obj)
         if not meshes: return
         tex_key = None
         if not glass:
