@@ -48,7 +48,48 @@ function setFile(file) {
   if (!typeOf(file)) { alert('Bitte eine .zip (Matterport) oder .3dm (Rhino) Datei wählen.'); return; }
   chosenFile = file;
   $('fname').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB · ${typeOf(file) === 'rhino' ? 'Rhino' : 'Matterport'}`;
+  // Textur-Feld nur bei Rhino zeigen (Matterport bringt Texturen im ZIP mit)
+  $('texrow').classList.toggle('hidden', typeOf(file) !== 'rhino');
   $('upload-btn').disabled = false;
+}
+
+// ---------------------------------------------------------------------------
+//  Texturen (für Rhino): Bilder oder ZIP, Zuordnung später per Dateiname
+// ---------------------------------------------------------------------------
+let chosenTextures = [];        // File[]
+const texdrop = $('texdrop'), texInput = $('texfiles');
+texdrop.addEventListener('click', () => texInput.click());
+texdrop.addEventListener('dragover', (e) => { e.preventDefault(); texdrop.classList.add('over'); });
+texdrop.addEventListener('dragleave', () => texdrop.classList.remove('over'));
+texdrop.addEventListener('drop', (e) => { e.preventDefault(); texdrop.classList.remove('over'); setTextures(e.dataTransfer.files); });
+texInput.addEventListener('change', () => setTextures(texInput.files));
+function setTextures(fileList) {
+  chosenTextures = Array.from(fileList || []);
+  const imgs = chosenTextures.filter((f) => /\.(png|jpe?g|webp|bmp|tga)$/i.test(f.name)).length;
+  const zips = chosenTextures.filter((f) => /\.zip$/i.test(f.name)).length;
+  $('texnames').textContent = chosenTextures.length
+    ? `${imgs} Bild(er)${zips ? ` + ${zips} ZIP` : ''} gewählt` : '';
+}
+
+// File[] -> { 'basename.png': ImageBitmap } (entpackt ZIPs)
+async function buildTexImages(files) {
+  const out = {};
+  const addImg = async (name, blob) => {
+    if (!/\.(png|jpe?g|webp|bmp)$/i.test(name)) return;   // tga/exotisch: createImageBitmap kann nicht
+    try { out[name.split(/[\\/]/).pop().toLowerCase()] = await createImageBitmap(blob); } catch (e) { console.warn('[admin] Textur nicht ladbar:', name, e.message); }
+  };
+  for (const f of files) {
+    if (/\.zip$/i.test(f.name)) {
+      const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm')).default;
+      const zip = await JSZip.loadAsync(await f.arrayBuffer());
+      for (const path of Object.keys(zip.files)) {
+        const entry = zip.files[path];
+        if (entry.dir) continue;
+        await addImg(path, await entry.async('blob'));
+      }
+    } else { await addImg(f.name, f); }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,19 +201,45 @@ function explodeInstances(rhino, doc) {
 // ---------------------------------------------------------------------------
 function setStatus(t, ok) { const s = $('status'); s.textContent = t; s.style.color = ok ? 'var(--green)' : 'var(--label2)'; }
 
-// Rhino-Bytes (Blöcke bereits aufgelöst) -> kompaktes GLB (meshopt) mit Layer-Metadaten.
-// -> Kunden laden schnell (kein rhino3dm), Features bleiben (Glas/3D_Scan/hide gebacken).
-async function convertToGLB(rhinoBytes) {
+const baseNm = (p) => p.split(/[\\/]/).pop().toLowerCase();
+const isScanLayer = (name) => /3d[\s_-]?scan/i.test(name) || /^\s*scan\s*$/i.test(name);
+
+// Rhino-Bytes (Blöcke bereits aufgelöst) -> kompaktes GLB mit Layer-Metadaten + Texturen.
+// texImages: { 'basename.png': ImageBitmap } – aus den separat hochgeladenen Texturdateien.
+async function convertToGLB(rhinoBytes, texImages) {
   const THREE = await import('three');
   const { Rhino3dmLoader } = await import('three/addons/loaders/3DMLoader.js');
   const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
+
+  // Material-ID -> Textur-Dateiname (aus rhino3dm, da 3DMLoader das Bild nicht lädt)
+  const matIdToTex = {};
+  try {
+    const mod = await import('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/rhino3dm.module.js');
+    const rhino = await mod.default();
+    const doc = rhino.File3dm.fromByteArray(rhinoBytes);
+    const M = doc.materials();
+    for (let i = 0; i < M.count; i++) {
+      const fm = M.get(i); const m = fm.material ? fm.material() : fm;
+      let t = null;
+      try { t = m.getTexture(rhino.TextureType.PBR_BaseColor) || m.getTexture(rhino.TextureType.Bitmap) || m.getTexture(rhino.TextureType.Diffuse); } catch (e) {}
+      if (t && t.fileName && m.id) matIdToTex[m.id] = baseNm(t.fileName);
+    }
+  } catch (e) { console.warn('[admin] Material→Textur-Map fehlgeschlagen', e); }
+
+  const texCache = {};
+  function getTexture(base) {
+    if (!base || !texImages || !texImages[base]) return null;
+    if (!texCache[base]) { const t = new THREE.Texture(texImages[base]); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; t.needsUpdate = true; texCache[base] = t; }
+    return texCache[base];
+  }
+
   const rl = new Rhino3dmLoader(); rl.setLibraryPath('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/');
   const blobUrl = window.URL.createObjectURL(new Blob([rhinoBytes]));
   const root = await new Promise((res, rej) => rl.load(blobUrl, res, undefined, rej));
   window.URL.revokeObjectURL(blobUrl);
 
   const layers = (root.userData && root.userData.layers) ? root.userData.layers : [];
-  const rm = []; let scanExists = false;
+  const rm = []; let scanExists = false, texApplied = 0;
   root.traverse((o) => {
     if (o.isLine || o.isLineSegments || o.isPoints) { rm.push(o); return; }
     if (!o.isMesh) return;
@@ -181,20 +248,24 @@ async function convertToGLB(rhinoBytes) {
     const name = layer ? (layer.name || '') : '';
     const ln = name.toLowerCase();
     const isGlass = ln.includes('glas') || ln.includes('glaß');
-    const isScan = ln === '3d_scan';
+    const isScan = isScanLayer(name);
     const visible = layer ? (layer.visible !== false && ln !== 'hide') : true;
-    if (!isGlass && !visible) { rm.push(o); return; }          // in Rhino ausgeblendet -> weglassen
+    // Scan & Glas immer behalten, auch wenn der Layer in Rhino aus ist
+    if (!isGlass && !isScan && !visible) { rm.push(o); return; }
     if (isScan) scanExists = true;
-    const old = Array.isArray(o.material) ? o.material[0] : o.material;
-    const col = (old && old.color) ? old.color.clone() : new THREE.Color(0xcccccc);
-    o.material = new THREE.MeshStandardMaterial({ color: col, metalness: 0, roughness: 0.85, side: THREE.DoubleSide });
+    // Textur über Material-ID auflösen
+    const om = Array.isArray(o.material) ? o.material[0] : o.material;
+    const matId = om && om.userData ? om.userData.id : null;
+    const tex = getTexture(matId ? matIdToTex[matId] : null);
+    if (tex) texApplied++;
+    const col = (om && om.color) ? om.color.clone() : new THREE.Color(0xcccccc);
+    o.material = new THREE.MeshStandardMaterial({ map: tex || null, color: tex ? 0xffffff : col, metalness: 0, roughness: 0.9, side: THREE.DoubleSide });
     o.userData = { gmat: isGlass ? 'glass' : '', grp: isScan ? 'scan' : 'cad' };
   });
   rm.forEach((o) => { if (o.parent) o.parent.remove(o); o.geometry && o.geometry.dispose(); });
 
-  // GLB exportieren (plain – meshopt verzerrt diese Geometrie; Kompression via gzip beim Upload)
   const glb = await new Promise((res, rej) => new GLTFExporter().parse(root, res, rej, { binary: true, onlyVisible: false }));
-  return { glb: new Uint8Array(glb), scanExists };
+  return { glb: new Uint8Array(glb), scanExists, texApplied };
 }
 
 async function gzipBytes(u8) {
@@ -243,14 +314,16 @@ $('upload-btn').addEventListener('click', async () => {
     try {
       setStatus('Verarbeite Rhino: Blöcke (Stützen etc.) auflösen …');
       const pr = await processRhino(file);
+      let texImages = {};
+      if (chosenTextures.length) { setStatus('Lade Texturen …'); texImages = await buildTexImages(chosenTextures); }
       setStatus('Konvertiere nach GLB … das kann dauern.');
-      const conv = await convertToGLB(pr.bytes);
+      const conv = await convertToGLB(pr.bytes, texImages);
       has2d = conv.scanExists;
       setStatus('Komprimiere (gzip) …');
       const gz = await gzipBytes(conv.glb);
       uploadData = new Blob([gz], { type: 'application/gzip' });
       ext = 'glb.gz';
-      console.log(`[admin BUILD 25] Rhino→GLB: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke übersprungen · 3D_Scan=${has2d} · GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB gzip`);
+      console.log(`[admin BUILD 26] Rhino→GLB: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke übersprungen · 3D_Scan=${has2d} · Texturen ${Object.keys(texImages).length} geladen / ${conv.texApplied} angewandt · GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB gzip`);
       setStatus(`Konvertiert: GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB. Lade hoch …`);
     } catch (e) { setStatus('Konvertierung fehlgeschlagen: ' + (e.message || e)); $('upload-btn').disabled = false; return; }
   }
@@ -280,6 +353,7 @@ $('upload-btn').addEventListener('click', async () => {
 $('cancel-edit').addEventListener('click', resetForm);
 function resetForm() {
   editing = null; chosenFile = null; fileInput.value = '';
+  chosenTextures = []; texInput.value = ''; $('texnames').textContent = ''; $('texrow').classList.add('hidden');
   $('pname').value = ''; $('fname').textContent = ''; $('upload-btn').disabled = true;
   $('pname').disabled = false;
   $('form-title').textContent = 'Neues Projekt';

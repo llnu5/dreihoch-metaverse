@@ -205,8 +205,15 @@ function processRhinoGLB(root, has2d) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     o.frustumCulled = true;
-    if (o.userData && o.userData.gmat === 'glass') { o.material = glassMat; o.userData.isGlass = true; o.renderOrder = 2; }
-    (o.userData && o.userData.grp === 'scan' ? sc : cd).push(o);
+    const isGlass = o.userData && o.userData.gmat === 'glass';
+    const isScan = o.userData && o.userData.grp === 'scan';
+    if (isGlass) { o.material = glassMat; o.userData.isGlass = true; o.renderOrder = 2; }
+    else if (isScan) {
+      // Scan = fotogetreu -> unlit (wie Matterport): Beleuchtung/AO/IBL ignorieren, Textur 1:1 zeigen
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      o.material = new THREE.MeshBasicMaterial({ map: m && m.map ? m.map : null, color: (m && m.map) ? 0xffffff : (m && m.color ? m.color.clone() : new THREE.Color(0xcccccc)), side: THREE.DoubleSide });
+    }
+    (isScan ? sc : cd).push(o);
   });
   scanGroup = null; cadGroup = null;
   // Nur gruppieren, wenn ein 3D_Scan existiert (Gruppen ZUERST anhängen, dann erst rotieren -> keine Doppel-Rotation)
@@ -249,6 +256,7 @@ function rhinoLayerName(obj, layers) {
 function rhinoLayers(root) {
   return (root.userData && (root.userData.layers || (root.userData.document && root.userData.document.layers))) || null;
 }
+const isScanLayerName = (name) => !!name && (/3d[\s_-]?scan/i.test(name) || /^\s*scan\s*$/i.test(name));
 
 // Rhino-Nachbearbeitung:
 //  - Linien/Kurven/Punkte NICHT zeichnen (z. B. Pläne/Planköpfe, Bemaßung)
@@ -272,6 +280,8 @@ function postProcessRhino(root) {
       o.material = glassMat;
       o.userData.isGlass = true;
       o.renderOrder = 2;
+    } else if (isScanLayerName(name)) {
+      // Scan-Layer NICHT ausblenden, auch wenn er in Rhino aus ist -> kommt mit
     } else if (layer && (layer.visible === false || ln === 'hide')) {
       o.visible = false;          // Layer in Rhino ausgeblendet (oder Layer heißt "hide")
     }
@@ -286,7 +296,12 @@ function splitByScanLayer(root) {
   root.traverse((o) => {
     if (!o.isMesh && !o.isLine && !o.isPoints) return;
     const n = rhinoLayerName(o, layers);
-    (n && String(n).trim().toLowerCase() === '3d_scan' ? sc : cd).push(o);
+    const scan = isScanLayerName(n);
+    if (scan && o.isMesh) {       // Scan unlit (fotogetreu, wie Matterport)
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      o.material = new THREE.MeshBasicMaterial({ map: m && m.map ? m.map : null, color: (m && m.map) ? 0xffffff : (m && m.color ? m.color.clone() : new THREE.Color(0xcccccc)), side: THREE.DoubleSide });
+    }
+    (scan ? sc : cd).push(o);
   });
   sc.forEach((o) => scanGroup.attach(o));
   cd.forEach((o) => cadGroup.attach(o));
