@@ -35,17 +35,39 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
+PLUGIN_VERSION = '1.0'
 SUPABASE_URL = 'https://jjeoxzbfsnrnwpooabfw.supabase.co'
 SUPABASE_KEY = 'sb_publishable_l4hAdP8VzaJ23vAPnv3BgA_52LkRXta'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
 REST_BASE    = SUPABASE_URL + '/rest/v1'
-VIEWER_BASE  = 'https://llnu5.github.io/prinzenstrasse-85-rundgang/index.html'
+WEB_BASE     = 'https://llnu5.github.io/prinzenstrasse-85-rundgang/'
+VIEWER_BASE  = WEB_BASE + 'index.html'
+ADMIN_URL    = WEB_BASE + 'admin.html'
 JPEG_QUALITY = 85
 
-# Laufzeit-Einstellungen (per Menue gesetzt)
-OPT = {'max_tex': 1024, 'poly_budget': 1000000, 'selected_only': False, 'layers': None}
+# Laufzeit-Einstellungen (per Panel gesetzt)
+OPT = {'max_tex': 1024, 'poly_budget': 1000000, 'selected_only': False, 'layers': None,
+       'textures': True, 'materials': True}
+DEFAULT_COL = [0.82, 0.82, 0.82]
 
 def log(m): Rhino.RhinoApp.WriteLine('[publish] ' + m)
+
+# Fortschritts-Callback (vom Panel gesetzt) -> Status/Progressbar
+_PROGRESS = [None]
+def emit(m):
+    log(m); cb = _PROGRESS[0]
+    if cb:
+        try: cb(m)
+        except: pass
+
+def open_url(url):
+    """Browser oeffnen -- .NET Core/Rhino8 braucht UseShellExecute=True."""
+    try:
+        psi = System.Diagnostics.ProcessStartInfo(url); psi.UseShellExecute = True
+        System.Diagnostics.Process.Start(psi); return True
+    except Exception as e:
+        try: System.Diagnostics.Process.Start(url); return True
+        except Exception as e2: log('open_url: %s' % e2); return False
 
 # ---------------------------------------------------------------------------
 #  Layer-Logik (identisch zur Web-App)
@@ -213,7 +235,7 @@ def collect(raw):
             stats['hidden'] += 1; return
         # Textur zuerst (entscheidet, ob Render-Mesh fuer UVs noetig ist)
         tex_key = None; tex_obj = None
-        if not glass:
+        if not glass and OPT.get('textures', True):
             tex_obj = material_texture(obj)
             if tex_obj and tex_obj.FileName:
                 base = os.path.basename(tex_obj.FileName).lower()
@@ -221,7 +243,7 @@ def collect(raw):
                 if tex_cache.get(base): tex_key = base
         meshes = meshes_of_object(obj, tex_key is not None)
         if not meshes: return
-        col = material_color(obj)
+        col = material_color(obj) if OPT.get('materials', True) else DEFAULT_COL
         for m in meshes:
             if tex_key and tex_obj is not None: bake_uvw(m, tex_obj)   # Repeat/Offset in UVs backen
             if xform and xform != Rhino.Geometry.Transform.Identity: m.Transform(xform)
@@ -248,7 +270,11 @@ def collect(raw):
     st = Rhino.DocObjects.ObjectEnumeratorSettings()
     st.NormalObjects = True; st.HiddenObjects = True; st.LockedObjects = True
     st.IncludeLights = False; st.IncludeGrips = False; st.DeletedObjects = False
-    for obj in doc.Objects.GetObjectList(st):
+    objlist = doc.Objects.GetObjectList(st)
+    _n = 0
+    for obj in objlist:
+        _n += 1
+        if _n % 3000 == 0: emit('Sammle Geometrie ... %d Objekte, %d Meshes' % (_n, stats['meshes']))
         if not obj.IsValid: continue
         if obj.Geometry is None: continue
         if sel_ids is not None and str(obj.Id) not in sel_ids: continue
@@ -501,41 +527,92 @@ def link_set(pid, name, budget, tex, layers_csv):
         d.Strings.SetString('pr85_budget', str(budget)); d.Strings.SetString('pr85_tex', str(tex))
         d.Strings.SetString('pr85_layers', layers_csv or '')
     except Exception as e: log('link_set: %s' % e)
+def link_clear():
+    d = sc.doc
+    for k in ['pr85_project_id', 'pr85_project_name', 'pr85_budget', 'pr85_tex', 'pr85_layers']:
+        try: d.Strings.Delete(k)
+        except: pass
+
+def doc_scan_info():
+    """Erkennt der offenen Datei einen 3D-Scan-Layer mit Geometrie? -> Anzahl Scan-Meshes."""
+    try:
+        doc = sc.doc; scan_idx = set()
+        for i in range(doc.Layers.Count):
+            l = doc.Layers[i]
+            if not l.IsDeleted and is_scan_layer(l.Name): scan_idx.add(l.Index)
+        if not scan_idx: return 0
+        st = Rhino.DocObjects.ObjectEnumeratorSettings()
+        st.NormalObjects = True; st.HiddenObjects = True; st.LockedObjects = True
+        n = 0
+        for o in doc.Objects.GetObjectList(st):
+            if o.Attributes.LayerIndex in scan_idx and isinstance(o.Geometry, Rhino.Geometry.Mesh): n += 1
+        return n
+    except: return 0
 
 # ---------------------------------------------------------------------------
 #  Export-Kern (keine Dialoge) -> von Menue UND Panel genutzt
 # ---------------------------------------------------------------------------
-def export_and_upload(name, pid, version, layers_set, budget, texmax, selected_only, existing_settings, status=None):
+def export_and_upload(name, pid, version, budget, texmax, use_tex, use_mat, existing_settings, status=None):
     def st(m):
-        log(m)
-        if status:
-            try: status(m)
-            except: pass
+        emit(m)
     doc = sc.doc
-    OPT['layers'] = layers_set; OPT['poly_budget'] = budget; OPT['max_tex'] = texmax; OPT['selected_only'] = selected_only
-    cam = capture_camera()
-    st('Sammle Geometrie & Texturen ...')
-    raw = []; (stats, tex_cache) = collect(raw)
-    if not raw: return (False, 'Keine Geometrie (Layer-Auswahl pruefen).', 0, None)
-    st('Meshes %d | Scan %d | Glas %d | Tex %d | Bloecke %d' % (stats['meshes'], stats['scan'], stats['glass'], stats['tex'], stats['blocks']))
-    renderables = merge_and_extract(raw)
-    if not renderables: return (False, 'Keine Meshes nach Merge.', 0, None)
-    st('Baue GLB ...'); glb = build_glb(renderables, tex_cache)
-    st('Komprimiere (gzip) ...'); gz = gzip_bytes(glb); mb = len(gz) / 1048576.0
-    if mb > 50:
-        return (False, 'Datei %.1f MB > 50 MB (Supabase-Free). Kleineres Budget/Textur waehlen.' % mb, mb, None)
-    settings = dict(existing_settings) if isinstance(existing_settings, dict) else {}
-    if cam: settings['start_camera'] = cam
-    path = 'projects/%s/model.glb.gz' % pid
-    st('Lade hoch (%.1f MB) ...' % mb)
-    err = storage_upload(path, gz, 'application/gzip')
-    if err: return (False, 'Upload fehlgeschlagen: ' + err, mb, None)
-    row = {'id': pid, 'name': name, 'type': 'rhino', 'file_path': path,
-           'file_name': os.path.basename(doc.Path or 'rhino.3dm'), 'has_2d_scan': stats['scan'] > 0,
-           'version': version, 'settings': settings}
-    if not rest_json('/projects?on_conflict=id', 'POST', row):
-        return (False, 'Storage ok, aber Projektzeile schlug fehl.', mb, None)
-    return (True, VIEWER_BASE + '?p=' + pid, mb, {'has_scan': stats['scan'] > 0})
+    OPT['layers'] = None; OPT['poly_budget'] = budget; OPT['max_tex'] = texmax; OPT['selected_only'] = False
+    OPT['textures'] = bool(use_tex); OPT['materials'] = bool(use_mat)
+    _PROGRESS[0] = status
+    try:
+        cam = capture_camera()
+        st('Sammle Geometrie & Texturen ...')
+        raw = []; (stats, tex_cache) = collect(raw)
+        if not raw: return (False, 'Keine sichtbare Geometrie gefunden.', 0, None)
+        st('Verarbeite: %d Meshes (Scan %d, Glas %d, Tex %d, Bloecke %d) ...' % (stats['meshes'], stats['scan'], stats['glass'], stats['tex'], stats['blocks']))
+        renderables = merge_and_extract(raw)
+        if not renderables: return (False, 'Keine Meshes nach Merge.', 0, None)
+        st('Baue GLB ...'); glb = build_glb(renderables, tex_cache)
+        st('Komprimiere (gzip) ...'); gz = gzip_bytes(glb); mb = len(gz) / 1048576.0
+        if mb > 50:
+            return (False, 'Datei %.1f MB > 50 MB (Supabase-Free).\nKleineres Budget/Textur waehlen, oder Texturen aus.' % mb, mb, None)
+        settings = dict(existing_settings) if isinstance(existing_settings, dict) else {}
+        if cam: settings['start_camera'] = cam
+        path = 'projects/%s/model.glb.gz' % pid
+        st('Lade hoch (%.1f MB) ... bitte warten' % mb)
+        err = storage_upload(path, gz, 'application/gzip')
+        if err: return (False, 'Upload fehlgeschlagen: ' + err, mb, None)
+        st('Schreibe Projektdaten ...')
+        row = {'id': pid, 'name': name, 'type': 'rhino', 'file_path': path,
+               'file_name': os.path.basename(doc.Path or 'rhino.3dm'), 'has_2d_scan': stats['scan'] > 0,
+               'version': version, 'settings': settings}
+        if not rest_json('/projects?on_conflict=id', 'POST', row):
+            return (False, 'Storage ok, aber Projektzeile schlug fehl.', mb, None)
+        return (True, VIEWER_BASE + '?p=' + pid, mb, {'has_scan': stats['scan'] > 0})
+    finally:
+        _PROGRESS[0] = None
+
+def _link_budget_tex(lk):
+    b = lk.get('budget'); budget = 1000000
+    if b == 'Unbegrenzt': budget = 0
+    elif b and b.isdigit(): budget = int(b)
+    t = lk.get('tex'); tex = int(t) if (t and t.isdigit()) else 1024
+    return budget, tex
+
+def quick_update():
+    """1-Klick: aktualisiert das mit DIESER Datei verknuepfte Projekt (ohne Dialog)."""
+    lk = link_get()
+    if not lk:
+        rs.MessageBox('Diese Datei ist mit keinem Projekt verknuepft.\nBitte einmal "Publish-Panel" oeffnen und "Als neues Projekt" anlegen.', 0, 'Publish'); return
+    projects = fetch_projects(); ver = 1; existing = {}
+    for p in projects:
+        if p['id'] == lk['id']:
+            ver = int(p.get('version', 1)) + 1
+            if isinstance(p.get('settings'), dict): existing = p['settings']
+            break
+    budget, tex = _link_budget_tex(lk)
+    Rhino.RhinoApp.WriteLine('[publish] 1-Klick-Update: "%s" -> v%d' % (lk['name'], ver))
+    ok, msg, mb, info = export_and_upload(lk['name'], lk['id'], ver, budget, tex, True, True, existing, None)
+    if ok:
+        link_set(lk['id'], lk['name'], budget, tex, lk.get('layers', ''))
+        if rs.MessageBox('Aktualisiert: "%s" v%d (%.1f MB)\n\n%s\n\nIm Browser oeffnen?' % (lk['name'], ver, mb, msg), 4, 'Publish') == 6: open_url(msg)
+    else:
+        rs.MessageBox('Fehler: ' + msg, 0, 'Publish')
 
 def do_publish():
     doc = sc.doc
@@ -650,37 +727,41 @@ def show_panel():
     import Eto.Forms as F
     import Eto.Drawing as D
     import Rhino.UI
-    doc = sc.doc
 
-    def L(s):
-        x = F.Label(); x.Text = s; return x
-
-    all_layers = []; visible = []
-    for l in doc.Layers:
-        if l.IsDeleted: continue
-        all_layers.append(l.Name)
-        if l.IsVisible or is_scan_layer(l.Name): visible.append(l.Name)
+    def L(s, bold=False, dim=False):
+        x = F.Label(); x.Text = s
+        try:
+            if bold: x.Font = D.Font(D.FontFamilies.Sans, 8, D.FontStyle.Bold)
+            if dim: x.TextColor = D.Colors.Gray
+        except: pass
+        return x
 
     link0 = link_get()
-    S = {'layers': set(visible), 'projects': []}
-    if link0 and link0.get('layers'):
-        sel = [x for x in link0['layers'].split('||') if x]
-        if sel: S['layers'] = set(sel)
+    scan_n = doc_scan_info()
+    S = {'projects': []}
 
-    dlg = F.Dialog(); dlg.Title = 'Prinzenstrasse Rundgang - Publish'
-    dlg.Padding = D.Padding(14); dlg.Resizable = True; dlg.MinimumSize = D.Size(440, 580)
+    dlg = F.Dialog(); dlg.Title = 'Rundgang-Publisher  v%s' % PLUGIN_VERSION
+    dlg.Padding = D.Padding(12); dlg.Resizable = True; dlg.MinimumSize = D.Size(430, 600)
 
-    linked_lbl = L('')
-    def upd_linked():
+    # ---- DIESE DATEI ----
+    linked_lbl = L(''); scan_lbl = L('', dim=True)
+    btn_unlink = F.Button(); btn_unlink.Text = 'Loesen'
+    def upd_file_box():
         lk = link_get()
         if lk:
             ver = '?'
             for p in S['projects']:
                 if p['id'] == lk['id']: ver = str(p.get('version', 1)); break
-            linked_lbl.Text = u'Diese Datei → "%s" (v%s)   — Update = 1 Klick' % (lk['name'], ver)
+            linked_lbl.Text = u'●  Verknuepft mit  "%s"  (v%s)' % (lk['name'], ver)
+            btn_unlink.Visible = True
         else:
-            linked_lbl.Text = 'Diese Datei: noch nicht verknuepft. Erst "Als neues Projekt".'
+            linked_lbl.Text = u'○  Diese Datei ist noch nicht verknuepft'
+            btn_unlink.Visible = False
+        scan_lbl.Text = (u'3D-Scan in Datei:  erkannt  (%d Tiles)' % scan_n) if scan_n > 0 else u'3D-Scan in Datei:  keiner gefunden'
+    def on_unlink(s, e): link_clear(); upd_file_box(); status_lbl.Text = 'Verknuepfung geloest.'
+    btn_unlink.Click += on_unlink
 
+    # ---- OPTIONEN ----
     budget_dd = F.DropDown()
     for it in BUDGETS: budget_dd.Items.Add(it)
     budget_dd.SelectedIndex = 2
@@ -689,53 +770,50 @@ def show_panel():
     for it in TEXSIZES: tex_dd.Items.Add(it)
     tex_dd.SelectedIndex = 1
     if link0 and link0.get('tex') in TEXSIZES: tex_dd.SelectedIndex = TEXSIZES.index(link0['tex'])
+    cb_tex = F.CheckBox(); cb_tex.Text = 'Texturen hochladen'; cb_tex.Checked = True
+    cb_mat = F.CheckBox(); cb_mat.Text = 'Materialfarben hochladen'; cb_mat.Checked = True
 
-    layers_btn = F.Button()
-    def upd_layers_btn(): layers_btn.Text = 'Layer waehlen (%d aktiv)' % len(S['layers'])
-    upd_layers_btn()
-    def on_layers(s, e):
-        pick = rs.MultiListBox(all_layers, 'Layer einbeziehen (3D-Scan kommt automatisch)', 'Layer', list(S['layers']))
-        if pick is not None: S['layers'] = set(pick); upd_layers_btn()
-    layers_btn.Click += on_layers
-
-    status_lbl = L('')
+    # ---- STATUS / FORTSCHRITT ----
+    progress = F.ProgressBar(); progress.Indeterminate = True; progress.Visible = False
+    status_lbl = L('Bereit.')
     def status(m):
         status_lbl.Text = m
         try: F.Application.Instance.RunIteration()
         except: pass
 
-    projlist = F.ListBox(); projlist.Height = 170
+    projlist = F.ListBox(); projlist.Height = 150
 
     def cur_budget():
         v = BUDGETS[budget_dd.SelectedIndex]; return 0 if v == 'Unbegrenzt' else int(v)
     def cur_tex(): return int(TEXSIZES[tex_dd.SelectedIndex])
-    def layers_csv(): return '||'.join(sorted(S['layers']))
 
     def refresh_list():
         S['projects'] = fetch_projects()
         projlist.Items.Clear()
         for p in S['projects']:
-            projlist.Items.Add('%s    v%s%s' % (p['name'], p.get('version', 1), '   [Scan]' if p.get('has_2d_scan') else ''))
-        upd_linked()
-    refresh_list()
-
+            projlist.Items.Add(u'%s      v%s%s' % (p['name'], p.get('version', 1), '    [Scan]' if p.get('has_2d_scan') else ''))
+        upd_file_box()
     def existing_settings_for(pid):
         for p in S['projects']:
             if p['id'] == pid and isinstance(p.get('settings'), dict): return p['settings']
         return {}
 
+    def set_busy(b):
+        progress.Visible = b
+        for btn in [btn_update, btn_new, btn_open, btn_del, btn_link, btn_ref, btn_admin]: btn.Enabled = not b
+        try: F.Application.Instance.RunIteration()
+        except: pass
+
     def publish_core(name, pid, version):
-        btn_update.Enabled = False; btn_new.Enabled = False
+        set_busy(True); status('Starte ...')
         try:
-            ok, msg, mb, info = export_and_upload(name, pid, version, set(S['layers']), cur_budget(), cur_tex(), False, existing_settings_for(pid), status)
+            ok, msg, mb, info = export_and_upload(name, pid, version, cur_budget(), cur_tex(), cb_tex.Checked, cb_mat.Checked, existing_settings_for(pid), status)
         finally:
-            btn_update.Enabled = True; btn_new.Enabled = True
+            set_busy(False)
         if ok:
-            link_set(pid, name, BUDGETS[budget_dd.SelectedIndex], TEXSIZES[tex_dd.SelectedIndex], layers_csv())
-            refresh_list(); status_lbl.Text = 'Fertig (%.1f MB) - %s v%d' % (mb, name, version)
-            if rs.MessageBox('Veroeffentlicht (%.1f MB)!\n\n%s\n\nIm Browser oeffnen?' % (mb, msg), 4, 'Publish') == 6:
-                try: System.Diagnostics.Process.Start(msg)
-                except: pass
+            link_set(pid, name, BUDGETS[budget_dd.SelectedIndex], TEXSIZES[tex_dd.SelectedIndex], '')
+            refresh_list(); status_lbl.Text = u'✓ Fertig - "%s" v%d  (%.1f MB)' % (name, version, mb)
+            if rs.MessageBox('Veroeffentlicht (%.1f MB)!\n\n%s\n\nIm Browser oeffnen?' % (mb, msg), 4, 'Publish') == 6: open_url(msg)
             rs.ClipboardText(msg)
         else:
             status_lbl.Text = 'Fehler: ' + msg
@@ -744,7 +822,7 @@ def show_panel():
     def on_update(s, e):
         lk = link_get()
         if not lk:
-            rs.MessageBox('Noch nicht verknuepft.\nBitte "Als neues Projekt" - oder unten ein Projekt waehlen und "Mit Datei verknuepfen".', 0, 'Publish'); return
+            rs.MessageBox('Noch nicht verknuepft.\nNutze "Neues Projekt" - oder unten ein Projekt waehlen und "Verknuepfen".', 0, 'Publish'); return
         ver = 1
         for p in S['projects']:
             if p['id'] == lk['id']: ver = int(p.get('version', 1)) + 1; break
@@ -758,45 +836,65 @@ def show_panel():
         return S['projects'][i] if (i is not None and 0 <= i < len(S['projects'])) else None
     def on_open(s, e):
         p = sel_proj()
-        if p:
-            try: System.Diagnostics.Process.Start(VIEWER_BASE + '?p=' + p['id'])
-            except: pass
+        if p: open_url(VIEWER_BASE + '?p=' + p['id'])
     def on_delete(s, e):
         p = sel_proj()
         if not p: return
         if rs.MessageBox('"%s" wirklich loeschen?' % p['name'], 4, 'Loeschen') == 6:
-            storage_delete(p.get('file_path', '')); rest_delete('/projects?id=eq.' + p['id']); refresh_list()
+            storage_delete(p.get('file_path', '')); rest_delete('/projects?id=eq.' + p['id']); refresh_list(); status_lbl.Text = 'Geloescht.'
     def on_link(s, e):
         p = sel_proj()
         if p:
-            link_set(p['id'], p['name'], BUDGETS[budget_dd.SelectedIndex], TEXSIZES[tex_dd.SelectedIndex], layers_csv())
-            upd_linked(); status_lbl.Text = 'Verknuepft mit "%s"' % p['name']
-    def on_refresh(s, e): refresh_list()
+            link_set(p['id'], p['name'], BUDGETS[budget_dd.SelectedIndex], TEXSIZES[tex_dd.SelectedIndex], '')
+            upd_file_box(); status_lbl.Text = u'Verknuepft mit "%s"' % p['name']
+    def on_refresh(s, e): refresh_list(); status_lbl.Text = 'Liste aktualisiert.'
+    def on_admin(s, e): open_url(ADMIN_URL)
 
-    btn_update = F.Button(); btn_update.Text = u'↻  Aktualisieren (1 Klick)'; btn_update.Click += on_update
-    btn_new = F.Button(); btn_new.Text = '+  Als neues Projekt'; btn_new.Click += on_new
+    btn_update = F.Button(); btn_update.Text = u'↻   Aktualisieren  (1 Klick)'; btn_update.Click += on_update
+    btn_new = F.Button(); btn_new.Text = u'+   Neues Projekt anlegen'; btn_new.Click += on_new
     btn_open = F.Button(); btn_open.Text = 'Oeffnen'; btn_open.Click += on_open
     btn_del = F.Button(); btn_del.Text = 'Loeschen'; btn_del.Click += on_delete
-    btn_link = F.Button(); btn_link.Text = 'Mit Datei verknuepfen'; btn_link.Click += on_link
+    btn_link = F.Button(); btn_link.Text = 'Verknuepfen'; btn_link.Click += on_link
     btn_ref = F.Button(); btn_ref.Text = 'Neu laden'; btn_ref.Click += on_refresh
+    btn_admin = F.Button(); btn_admin.Text = 'Admin-Seite'; btn_admin.Click += on_admin
     btn_close = F.Button(); btn_close.Text = 'Schliessen'; btn_close.Click += (lambda s, e: dlg.Close())
 
-    lay = F.DynamicLayout(); lay.DefaultSpacing = D.Size(6, 6)
-    lay.AddRow(L('Modell veroeffentlichen / aktualisieren'))
-    lay.AddRow(linked_lbl)
-    lay.AddRow(L('Polygon-Budget'), budget_dd)
-    lay.AddRow(L('Texturgroesse'), tex_dd)
-    lay.AddRow(L('Layer'), layers_btn)
-    lay.AddRow(btn_update, btn_new)
-    lay.AddRow(status_lbl)
-    lay.AddRow(L('Projekte online:'))
-    lay.AddRow(projlist)
-    r = F.DynamicLayout(); r.DefaultSpacing = D.Size(6, 6); r.AddRow(btn_open, btn_del, btn_link, btn_ref)
-    lay.AddRow(r)
-    lay.AddRow(None)
-    lay.AddRow(btn_close)
-    dlg.Content = lay
+    refresh_list()
 
+    def gbox(title, inner):
+        gb = F.GroupBox(); gb.Text = title; gb.Padding = D.Padding(8); gb.Content = inner; return gb
+
+    hdr = F.DynamicLayout(); hdr.AddRow(L('Prinzenstrasse Rundgang', bold=True), None, L('Publisher v%s' % PLUGIN_VERSION, dim=True))
+
+    g1 = F.DynamicLayout(); g1.DefaultSpacing = D.Size(6, 4)
+    g1.AddRow(linked_lbl, None, btn_unlink)
+    g1.AddRow(scan_lbl)
+
+    g2 = F.DynamicLayout(); g2.DefaultSpacing = D.Size(8, 6)
+    g2.AddRow(L('Polygon-Budget'), budget_dd)
+    g2.AddRow(L('Texturgroesse (px)'), tex_dd)
+    g2.AddRow(cb_tex)
+    g2.AddRow(cb_mat)
+
+    g3 = F.DynamicLayout(); g3.DefaultSpacing = D.Size(6, 6)
+    g3.AddRow(projlist)
+    rb = F.DynamicLayout(); rb.DefaultSpacing = D.Size(6, 6); rb.AddRow(btn_open, btn_link, btn_del, btn_ref)
+    g3.AddRow(rb)
+
+    main = F.DynamicLayout(); main.DefaultSpacing = D.Size(8, 8)
+    main.AddRow(hdr)
+    main.AddRow(gbox('DIESE DATEI', g1))
+    main.AddRow(gbox('EXPORT-OPTIONEN', g2))
+    main.AddRow(btn_update)
+    main.AddRow(btn_new)
+    main.AddRow(progress)
+    main.AddRow(status_lbl)
+    main.AddRow(gbox('PROJEKTE ONLINE', g3))
+    ft = F.DynamicLayout(); ft.DefaultSpacing = D.Size(6, 6); ft.AddRow(btn_admin, None, btn_close)
+    main.AddRow(ft)
+    dlg.Content = main
+
+    if globals().get('PR85_NOSHOW'): return dlg   # Test-Hook: nur konstruieren
     try: dlg.ShowModal(Rhino.UI.RhinoEtoApp.MainWindow)
     except: dlg.ShowModal()
 
@@ -807,11 +905,37 @@ def menu_main():
     if choice == 'Modell veroeffentlichen': do_publish()
     else: do_manage()
 
-def main():
+def register_aliases():
+    """Befehle Publish / PublishUpload / PublishAdmin registrieren (fuer Toolbar-Buttons).
+    Selbst-lokalisierend ueber __file__; macht nichts, falls Pfad unbekannt."""
+    try: p = __file__
+    except: return
+    if not p or not p.lower().endswith('.py'): return
     try:
-        show_panel()
+        base = os.path.dirname(p)
+        up = os.path.join(base, 'pr85_upload.py')
+        al = Rhino.ApplicationSettings.CommandAliasList
+        def setalias(name, macro):
+            try:
+                if al.IsAlias(name): al.SetMacro(name, macro)
+                else: al.Add(name, macro)
+            except: pass
+        setalias('Publish', '_-RunPythonScript "%s"' % p)
+        setalias('PublishUpload', '_-RunPythonScript "%s"' % up)
+    except Exception as e: log('Alias-Registrierung: %s' % e)
+
+def main():
+    register_aliases()
+    # Modus via sticky (Toolbar-Button "1-Klick" setzt 'upload', danach Reset)
+    try: mode = sc.sticky.get('pr85_mode', 'panel')
+    except: mode = 'panel'
+    try: sc.sticky['pr85_mode'] = 'panel'
+    except: pass
+    try:
+        if mode == 'upload': quick_update()
+        else: show_panel()
     except Exception as e:
-        log('Panel-Fehler, nutze Menue: %s' % e)
+        import traceback; log('Panel-Fehler -> Menue: %s' % e); log(traceback.format_exc()[-300:])
         menu_main()
 
 main()
