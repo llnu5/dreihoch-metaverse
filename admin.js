@@ -226,10 +226,23 @@ async function convertToGLB(rhinoBytes, texImages) {
     }
   } catch (e) { console.warn('[admin] Material→Textur-Map fehlgeschlagen', e); }
 
-  const texCache = {};
+  const texCache = {}; const MAX_TEX = 2048;
   function getTexture(base) {
     if (!base || !texImages || !texImages[base]) return null;
-    if (!texCache[base]) { const t = new THREE.Texture(texImages[base]); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; t.needsUpdate = true; texCache[base] = t; }
+    if (!texCache[base]) {
+      let img = texImages[base];
+      // sehr große Kacheln verkleinern (GPU-Speicher im Viewer bei vielen Scan-Kacheln)
+      if (img.width > MAX_TEX || img.height > MAX_TEX) {
+        const s = MAX_TEX / Math.max(img.width, img.height);
+        const c = new OffscreenCanvas(Math.max(1, Math.round(img.width * s)), Math.max(1, Math.round(img.height * s)));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        img = c.transferToImageBitmap();
+      }
+      const t = new THREE.Texture(img);
+      t.colorSpace = THREE.SRGBColorSpace; t.flipY = false;
+      t.userData.mimeType = 'image/jpeg';   // <- JPEG statt PNG: ~9× kleiner bei Foto-Texturen
+      t.needsUpdate = true; texCache[base] = t;
+    }
     return texCache[base];
   }
 
@@ -253,13 +266,15 @@ async function convertToGLB(rhinoBytes, texImages) {
     // Scan & Glas immer behalten, auch wenn der Layer in Rhino aus ist
     if (!isGlass && !isScan && !visible) { rm.push(o); return; }
     if (isScan) scanExists = true;
-    // Textur über Material-ID auflösen
-    const om = Array.isArray(o.material) ? o.material[0] : o.material;
-    const matId = om && om.userData ? om.userData.id : null;
-    const tex = getTexture(matId ? matIdToTex[matId] : null);
-    if (tex) texApplied++;
-    const col = (om && om.color) ? om.color.clone() : new THREE.Color(0xcccccc);
-    o.material = new THREE.MeshStandardMaterial({ map: tex || null, color: tex ? 0xffffff : col, metalness: 0, roughness: 0.9, side: THREE.DoubleSide });
+    // Textur über Material-ID auflösen – auch bei Mehr-Material-Meshes (z. B. Scan mit vielen Kacheln)
+    const buildMat = (om) => {
+      const matId = om && om.userData ? om.userData.id : null;
+      const tex = getTexture(matId ? matIdToTex[matId] : null);
+      if (tex) texApplied++;
+      const col = (om && om.color) ? om.color.clone() : new THREE.Color(0xcccccc);
+      return new THREE.MeshStandardMaterial({ map: tex || null, color: tex ? 0xffffff : col, metalness: 0, roughness: 0.9, side: THREE.DoubleSide });
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(buildMat) : buildMat(o.material);
     o.userData = { gmat: isGlass ? 'glass' : '', grp: isScan ? 'scan' : 'cad' };
   });
   rm.forEach((o) => { if (o.parent) o.parent.remove(o); o.geometry && o.geometry.dispose(); });
@@ -323,7 +338,7 @@ $('upload-btn').addEventListener('click', async () => {
       const gz = await gzipBytes(conv.glb);
       uploadData = new Blob([gz], { type: 'application/gzip' });
       ext = 'glb.gz';
-      console.log(`[admin BUILD 26] Rhino→GLB: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke übersprungen · 3D_Scan=${has2d} · Texturen ${Object.keys(texImages).length} geladen / ${conv.texApplied} angewandt · GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB gzip`);
+      console.log(`[admin BUILD 28] Rhino→GLB: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke übersprungen · 3D_Scan=${has2d} · Texturen ${Object.keys(texImages).length} geladen / ${conv.texApplied} angewandt · GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB gzip`);
       setStatus(`Konvertiert: GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB. Lade hoch …`);
     } catch (e) { setStatus('Konvertierung fehlgeschlagen: ' + (e.message || e)); $('upload-btn').disabled = false; return; }
   }

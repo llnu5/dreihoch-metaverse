@@ -210,8 +210,8 @@ function processRhinoGLB(root, has2d) {
     if (isGlass) { o.material = glassMat; o.userData.isGlass = true; o.renderOrder = 2; }
     else if (isScan) {
       // Scan = fotogetreu -> unlit (wie Matterport): Beleuchtung/AO/IBL ignorieren, Textur 1:1 zeigen
-      const m = Array.isArray(o.material) ? o.material[0] : o.material;
-      o.material = new THREE.MeshBasicMaterial({ map: m && m.map ? m.map : null, color: (m && m.map) ? 0xffffff : (m && m.color ? m.color.clone() : new THREE.Color(0xcccccc)), side: THREE.DoubleSide });
+      const toUnlit = (m) => new THREE.MeshBasicMaterial({ map: m && m.map ? m.map : null, color: (m && m.map) ? 0xffffff : (m && m.color ? m.color.clone() : new THREE.Color(0xcccccc)), side: THREE.DoubleSide });
+      o.material = Array.isArray(o.material) ? o.material.map(toUnlit) : toUnlit(o.material);
     }
     (isScan ? sc : cd).push(o);
   });
