@@ -125,6 +125,15 @@ function finishLoad(root) {
   const eyeHeight = box.min.y + Math.min(1.7, size.y * 0.5);
   home.pos.set(modelCenter.x + modelRadius * 0.85, eyeHeight + modelRadius * 0.45, modelCenter.z + modelRadius * 0.85);
   home.target.set(modelCenter.x, eyeHeight, modelCenter.z);
+  // Gespeicherte Rhino-Startkamera (aus dem Plugin) bevorzugen
+  try {
+    const cam = projectData && projectData.settings && projectData.settings.start_camera;
+    if (cam && cam.pos && cam.target) {
+      home.pos.set(cam.pos[0], cam.pos[1], cam.pos[2]);
+      home.target.set(cam.target[0], cam.target[1], cam.target[2]);
+      if (cam.fov) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
+    }
+  } catch (e) {}
   baseSpeed = Math.max(0.6, modelRadius * 0.12);
   camera.near = Math.max(0.01, modelRadius * 0.002);
   camera.far = modelRadius * 60;

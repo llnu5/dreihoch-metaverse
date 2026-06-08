@@ -18,7 +18,7 @@ import Rhino
 import scriptcontext as sc
 import rhinoscriptsyntax as rs
 import System
-import json, uuid, array, struct, os, re
+import json, uuid, array, struct, os, re, math
 
 import clr
 for r in ['System.Drawing', 'System.Net', 'System.IO.Compression', 'System.IO.Compression.FileSystem']:
@@ -112,6 +112,34 @@ def material_color(obj):
         except: pass
     return [0.8, 0.8, 0.8]
 
+def material_texture(obj):
+    """Diffuse-Bitmap-Textur (Texture-Objekt, fuer Dateiname + UVW-Transform)."""
+    mat = material_of(obj)
+    if not mat: return None
+    try:
+        bt = mat.GetBitmapTexture()
+        if bt and bt.FileName: return bt
+    except: pass
+    try:
+        tx = mat.GetTexture(Rhino.DocObjects.TextureType.Bitmap)
+        if tx and tx.FileName: return tx
+    except: pass
+    return None
+
+def bake_uvw(mesh, tex):
+    """Repeat/Offset/Rotation der Textur (UvwTransform) in die Mesh-UVs backen,
+    damit der Browser wie Rhino samplet (sonst gestaucht/verschoben)."""
+    try:
+        u = tex.UvwTransform
+        a, b, e = u.M00, u.M01, u.M03
+        c, d, f = u.M10, u.M11, u.M13
+        if a == 1 and b == 0 and e == 0 and c == 0 and d == 1 and f == 0: return  # Identitaet
+        tc = mesh.TextureCoordinates; n = tc.Count
+        for i in range(n):
+            p = tc[i]; x = p.X; y = p.Y
+            tc[i] = Rhino.Geometry.Point2f(a*x + b*y + e, c*x + d*y + f)
+    except: pass
+
 # ---------------------------------------------------------------------------
 #  Geometrie sammeln (Bloecke rekursiv aufloesen, Layer-Filter, Einheiten->m)
 # ---------------------------------------------------------------------------
@@ -179,15 +207,16 @@ def collect(raw):
             stats['hidden'] += 1; return
         meshes = meshes_of_object(obj)
         if not meshes: return
-        tex_key = None
+        tex_key = None; tex_obj = None
         if not glass:
-            tp = material_texture_path(obj)
-            if tp:
-                base = os.path.basename(tp).lower()
-                if base not in tex_cache: tex_cache[base] = load_resize_jpeg(tp)
+            tex_obj = material_texture(obj)
+            if tex_obj and tex_obj.FileName:
+                base = os.path.basename(tex_obj.FileName).lower()
+                if base not in tex_cache: tex_cache[base] = load_resize_jpeg(tex_obj.FileName)
                 if tex_cache.get(base): tex_key = base
         col = material_color(obj)
         for m in meshes:
+            if tex_key and tex_obj is not None: bake_uvw(m, tex_obj)   # Repeat/Offset in UVs backen
             if xform and xform != Rhino.Geometry.Transform.Identity: m.Transform(xform)
             raw.append({'mesh':m,'grp':'scan' if scan else 'cad','gmat':'glass' if glass else '','tex':tex_key,'color':col})
             stats['meshes'] += 1
@@ -425,8 +454,25 @@ def storage_delete(path):
 # ---------------------------------------------------------------------------
 #  Aktionen
 # ---------------------------------------------------------------------------
+def capture_camera():
+    """Aktive Rhino-Kamera -> Viewer-Szene (Z-up cm -> Meter, rotateX(-90): (x,y,z)->(x,z,-y))."""
+    try:
+        vp = sc.doc.Views.ActiveView.ActiveViewport
+        loc = vp.CameraLocation; d = vp.CameraDirection
+        f = Rhino.RhinoMath.UnitScale(sc.doc.ModelUnitSystem, Rhino.UnitSystem.Meters)
+        def conv(p): return [round(p.X*f, 4), round(p.Z*f, 4), round(-p.Y*f, 4)]
+        # Blickrichtung normieren und Target 10 m voraus setzen (CameraDirection ist ~Einheitsvektor)
+        ll = math.sqrt(d.X*d.X + d.Y*d.Y + d.Z*d.Z) or 1.0
+        step = 10.0 / (f if f else 1.0)   # 10 m in Modell-Einheiten
+        tgt = Rhino.Geometry.Point3d(loc.X + d.X/ll*step, loc.Y + d.Y/ll*step, loc.Z + d.Z/ll*step)
+        lens = vp.Camera35mmLensLength
+        fov = 2.0 * math.degrees(math.atan(12.0 / lens)) if (lens and lens > 0) else 50.0
+        return {'pos': conv(loc), 'target': conv(tgt), 'fov': round(fov, 2)}
+    except Exception as e:
+        log('Kamera-Capture: %s' % e); return None
+
 def fetch_projects():
-    rows = rest_get('/projects?select=id,name,type,version,has_2d_scan,file_path&order=created_at.desc')
+    rows = rest_get('/projects?select=id,name,type,version,has_2d_scan,file_path,settings&order=created_at.desc')
     return rows or []
 
 def do_publish():
@@ -462,6 +508,7 @@ def do_publish():
     NEW = '[ Neues Projekt ... ]'
     pick = rs.ListBox([NEW] + names, 'Projekt: neu anlegen oder aktualisieren', 'Publish: Ziel')
     if pick is None: return
+    settings = {}
     if pick == NEW:
         name = rs.GetString('Neuer Projektname')
         if not name: return
@@ -469,6 +516,11 @@ def do_publish():
     else:
         p = [x for x in projects if x['name']==pick][0]
         name = pick; pid = p['id']; version = int(p.get('version',1))+1
+        if isinstance(p.get('settings'), dict): settings = dict(p['settings'])   # Daylight-Settings erhalten
+
+    # Aktuelle Rhino-Kamera als Viewer-Startposition speichern
+    cam = capture_camera()
+    if cam: settings['start_camera'] = cam; log('Startkamera gespeichert.')
 
     log('--- Sammle Geometrie & Texturen ---')
     raw=[]; (stats, tex_cache) = collect(raw)
@@ -492,7 +544,7 @@ def do_publish():
     if err: log('UPLOAD FEHLGESCHLAGEN (%.1f MB): %s' % (mb, err)); rs.MessageBox('Upload fehlgeschlagen (%.1f MB):\n%s' % (mb, err),0,'Fehler'); return
 
     row={'id':pid,'name':name,'type':'rhino','file_path':path,
-         'file_name':os.path.basename(doc.Path or 'rhino.3dm'),'has_2d_scan':has_scan,'version':version}
+         'file_name':os.path.basename(doc.Path or 'rhino.3dm'),'has_2d_scan':has_scan,'version':version,'settings':settings}
     if not rest_json('/projects?on_conflict=id','POST',row):
         rs.MessageBox('Modell liegt im Storage, aber Projektzeile schlug fehl.',0,'Teilweise'); return
 
