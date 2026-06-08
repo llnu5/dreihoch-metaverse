@@ -349,7 +349,7 @@ $('upload-btn').addEventListener('click', async () => {
   setStatus(`Lade hoch (${(uploadData.size / 1048576).toFixed(0)} MB) … das kann dauern.`);
   const ct = ext === 'glb.gz' ? 'application/gzip' : (ext === 'glb' ? 'model/gltf-binary' : (file.type || 'application/zip'));
   const upErr = await uploadToStorage(path, uploadData, ct);
-  if (upErr) { setStatus('Upload fehlgeschlagen: ' + upErr); $('upload-btn').disabled = false; return; }
+  if (upErr) { setStatus(`Upload fehlgeschlagen (Datei war ${(uploadData.size / 1048576).toFixed(1)} MB): ` + upErr); $('upload-btn').disabled = false; return; }
 
   if (editing) {
     const { error } = await sb.from('projects').update({
