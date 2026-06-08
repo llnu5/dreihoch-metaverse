@@ -181,10 +181,40 @@ async function loadMatterportZip(url) {
 }
 
 // --- Rhino .3dm ---
+// Neuer Weg: vorkonvertiertes, komprimiertes GLB (schnell für Kunden), Metadaten gebacken
+function loadRhinoGLB(url, has2d) {
+  if (subEl) subEl.textContent = 'Lade Modell …';
+  import('three/addons/libs/meshopt_decoder.module.js').then(({ MeshoptDecoder }) => {
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+    gltfLoader.load(url, (gltf) => {
+      const root = gltf.scene;
+      root.rotateX(-Math.PI / 2);
+      const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xbfe0ee, metalness: 0, roughness: 0.06, transmission: 0.0, transparent: true, opacity: 0.26, side: THREE.DoubleSide, depthWrite: false });
+      scanGroup = new THREE.Group(); cadGroup = new THREE.Group();
+      const sc = [], cd = [];
+      root.traverse((o) => {
+        if (!o.isMesh) return;
+        o.frustumCulled = true;
+        if (o.userData && o.userData.gmat === 'glass') { o.material = glassMat; o.userData.isGlass = true; o.renderOrder = 2; }
+        (o.userData && o.userData.grp === 'scan' ? sc : cd).push(o);
+      });
+      sc.forEach((o) => scanGroup.attach(o));
+      cd.forEach((o) => cadGroup.attach(o));
+      root.add(scanGroup, cadGroup);
+      cadGroup.visible = true; scanGroup.visible = false;
+      if (sc.length === 0) scanGroup = null;
+      finishLoad(root);
+      if (has2d && scanGroup) setupScanSwitch();
+    }, (x) => setProgress(x.loaded, x.lengthComputable ? x.total : 0),
+       () => loadError('GLB-Modell konnte nicht geladen werden.'));
+  });
+}
+
 function loadRhino(url, has2d) {
   litModel = true;
   if (subEl) subEl.textContent = 'Lade Rhino-Modell …';
   addDaylight();
+  if (/\.glb(\?|$)/i.test(url)) { loadRhinoGLB(url, has2d); return; }   // konvertierte GLB-Projekte
   const rl = new Rhino3dmLoader();
   rl.setLibraryPath('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/');
   rl.load(url, (root) => {

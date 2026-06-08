@@ -160,6 +160,54 @@ function explodeInstances(rhino, doc) {
 // ---------------------------------------------------------------------------
 function setStatus(t, ok) { const s = $('status'); s.textContent = t; s.style.color = ok ? 'var(--green)' : 'var(--label2)'; }
 
+// Rhino-Bytes (Blöcke bereits aufgelöst) -> kompaktes GLB (meshopt) mit Layer-Metadaten.
+// -> Kunden laden schnell (kein rhino3dm), Features bleiben (Glas/3D_Scan/hide gebacken).
+async function convertToGLB(rhinoBytes) {
+  const THREE = await import('three');
+  const { Rhino3dmLoader } = await import('three/addons/loaders/3DMLoader.js');
+  const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
+  const rl = new Rhino3dmLoader(); rl.setLibraryPath('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/');
+  const blobUrl = window.URL.createObjectURL(new Blob([rhinoBytes]));
+  const root = await new Promise((res, rej) => rl.load(blobUrl, res, undefined, rej));
+  window.URL.revokeObjectURL(blobUrl);
+
+  const layers = (root.userData && root.userData.layers) ? root.userData.layers : [];
+  const rm = []; let scanExists = false;
+  root.traverse((o) => {
+    if (o.isLine || o.isLineSegments || o.isPoints) { rm.push(o); return; }
+    if (!o.isMesh) return;
+    const i = o.userData && o.userData.attributes ? o.userData.attributes.layerIndex : null;
+    const layer = (i != null && layers[i]) ? layers[i] : null;
+    const name = layer ? (layer.name || '') : '';
+    const ln = name.toLowerCase();
+    const isGlass = ln.includes('glas') || ln.includes('glaß');
+    const isScan = ln === '3d_scan';
+    const visible = layer ? (layer.visible !== false && ln !== 'hide') : true;
+    if (!isGlass && !visible) { rm.push(o); return; }          // in Rhino ausgeblendet -> weglassen
+    if (isScan) scanExists = true;
+    const old = Array.isArray(o.material) ? o.material[0] : o.material;
+    const col = (old && old.color) ? old.color.clone() : new THREE.Color(0xcccccc);
+    o.material = new THREE.MeshStandardMaterial({ color: col, metalness: 0, roughness: 0.85, side: THREE.DoubleSide });
+    o.userData = { gmat: isGlass ? 'glass' : '', grp: isScan ? 'scan' : 'cad' };
+  });
+  rm.forEach((o) => { if (o.parent) o.parent.remove(o); o.geometry && o.geometry.dispose(); });
+
+  const glb = await new Promise((res, rej) => new GLTFExporter().parse(root, res, rej, { binary: true, onlyVisible: false }));
+  let out = new Uint8Array(glb);
+  try {
+    const { WebIO } = await import('https://cdn.jsdelivr.net/npm/@gltf-transform/core/+esm');
+    const fns = await import('https://cdn.jsdelivr.net/npm/@gltf-transform/functions/+esm');
+    const { ALL_EXTENSIONS } = await import('https://cdn.jsdelivr.net/npm/@gltf-transform/extensions/+esm');
+    const { MeshoptEncoder } = await import('https://cdn.jsdelivr.net/npm/meshoptimizer/+esm');
+    await MeshoptEncoder.ready;
+    const io = new WebIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
+    const doc = await io.readBinary(new Uint8Array(glb));
+    await doc.transform(fns.meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+    out = await io.writeBinary(doc);
+  } catch (e) { console.warn('[admin] Kompression übersprungen (GLB unkomprimiert)', e); }
+  return { glb: out, scanExists };
+}
+
 // Upload: kleine Dateien Standard, große stückweise (resumable/TUS) -> robust & größer
 async function uploadToStorage(path, data, contentType) {
   if (data.size <= 6 * 1024 * 1024) {
@@ -195,21 +243,26 @@ $('upload-btn').addEventListener('click', async () => {
 
   let has2d = false;
   let uploadData = file;
+  let ext = file.name.split('.').pop().toLowerCase();
   if (type === 'rhino') {
-    setStatus('Verarbeite Rhino: Layer prüfen & Blöcke (Stützen etc.) auflösen …');
-    const pr = await processRhino(file);
-    has2d = pr.has3dScan;
-    if (pr.bytes) uploadData = new Blob([pr.bytes], { type: 'model/3dm' });
-    console.log(`[admin BUILD 23] Rhino: ${pr.added} Solids aufgelöst · ${pr.skipped} ausgeblendete Blöcke übersprungen · 3D_Scan=${has2d}`);
-    setStatus(`Verarbeitet: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke ausgelassen. Lade hoch …`);
+    try {
+      setStatus('Verarbeite Rhino: Blöcke (Stützen etc.) auflösen …');
+      const pr = await processRhino(file);
+      setStatus('Konvertiere nach GLB & komprimiere (meshopt) … das kann dauern.');
+      const conv = await convertToGLB(pr.bytes);
+      has2d = conv.scanExists;
+      uploadData = new Blob([conv.glb], { type: 'model/gltf-binary' });
+      ext = 'glb';
+      console.log(`[admin BUILD 24] Rhino→GLB: ${pr.added} Solids aufgelöst · ${pr.skipped} versteckte Blöcke übersprungen · 3D_Scan=${has2d} · ${(conv.glb.byteLength / 1048576).toFixed(1)} MB`);
+      setStatus(`Konvertiert: ${(conv.glb.byteLength / 1048576).toFixed(1)} MB GLB. Lade hoch …`);
+    } catch (e) { setStatus('Konvertierung fehlgeschlagen: ' + (e.message || e)); $('upload-btn').disabled = false; return; }
   }
 
   const id = editing ? editing.id : crypto.randomUUID();
-  const ext = file.name.split('.').pop().toLowerCase();
   const path = `projects/${id}/model.${ext}`;
 
   setStatus(`Lade hoch (${(uploadData.size / 1048576).toFixed(0)} MB) … das kann dauern.`);
-  const upErr = await uploadToStorage(path, uploadData, type === 'rhino' ? 'model/3dm' : (file.type || 'application/zip'));
+  const upErr = await uploadToStorage(path, uploadData, ext === 'glb' ? 'model/gltf-binary' : (file.type || 'application/zip'));
   if (upErr) { setStatus('Upload fehlgeschlagen: ' + upErr); $('upload-btn').disabled = false; return; }
 
   if (editing) {
