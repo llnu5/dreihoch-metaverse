@@ -211,20 +211,35 @@ def collect(raw):
         sx = Rhino.Geometry.Transform.Scale(Rhino.Geometry.Point3d.Origin, factor)
         for r in raw: r['mesh'].Transform(sx)
         log('Einheiten skaliert x%.4f -> Meter' % factor)
-
-    # Polygon-Budget: grosse Meshes reduzieren
-    budget = OPT['poly_budget']
-    if budget and budget > 0:
-        total = sum([r['mesh'].Faces.Count for r in raw])
-        if total > budget:
-            f = float(budget) / float(total)
-            log('Polygon-Reduktion: %d -> ~%d (Faktor %.2f)' % (total, budget, f))
-            for r in raw:
-                try:
-                    target = max(50, int(r['mesh'].Faces.Count * f))
-                    if r['mesh'].Faces.Count > target: r['mesh'].Reduce(target, True, 10, False)
-                except Exception as e: pass
     return stats, tex_cache
+
+# Meshes nach Material zusammenfuehren (statt 1 Node pro Quell-Mesh) + Polygon-Budget.
+def merge_and_extract(raw):
+    buckets = {}   # key -> [Mesh, meta]
+    for r in raw:
+        c = r['color']
+        if r['tex']:
+            key = ('t', r['grp'], r['gmat'], r['tex'])
+        else:
+            key = ('c', r['grp'], r['gmat'], (int(round(c[0]*20)), int(round(c[1]*20)), int(round(c[2]*20))))
+        if key not in buckets: buckets[key] = [Rhino.Geometry.Mesh(), r]
+        buckets[key][0].Append(r['mesh'])
+    budget = OPT['poly_budget']
+    total = sum(b[0].Faces.Count for b in buckets.values())
+    if budget and budget > 0 and total > budget:
+        f = float(budget) / float(total)
+        log('Polygon-Reduktion: %d -> ~%d' % (total, budget))
+        for b in buckets.values():
+            try:
+                tgt = max(50, int(b[0].Faces.Count * f))
+                if b[0].Faces.Count > tgt: b[0].Reduce(tgt, True, 10, False)
+            except: pass
+    rends = []
+    for (mesh, meta) in buckets.values():
+        rr = mesh_to_renderable(mesh, meta)
+        if rr: rends.append(rr)
+    log('Zusammengefuehrt: %d Quell-Meshes -> %d Material-Gruppen' % (len(raw), len(rends)))
+    return rends
 
 # ---------------------------------------------------------------------------
 #  Rhino-Mesh -> Renderable (Z-up; Viewer dreht auf Y-up)
@@ -434,10 +449,8 @@ def do_publish():
     log('Meshes %d | Scan %d | Glas %d | Texturen %d | Bloecke %d | versteckt %d' %
         (stats['meshes'],stats['scan'],stats['glass'],stats['tex'],stats['blocks'],stats['hidden']))
 
-    renderables=[]
-    for r in raw:
-        rr = mesh_to_renderable(r['mesh'], r)
-        if rr: renderables.append(rr)
+    renderables = merge_and_extract(raw)
+    if not renderables: log('Keine Meshes nach Merge.'); rs.MessageBox('Keine Geometrie.',0,'Publish'); return
     log('Baue GLB ...'); glb=build_glb(renderables, tex_cache)
     log('GLB %.1f MB | gzip ...' % (len(glb)/1048576.0))
     gz=gzip_bytes(glb); mb=len(gz)/1048576.0
