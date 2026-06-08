@@ -38,8 +38,8 @@ function defaults() {
     time: 14, north: 0,
     post: {
       shadows: true, shadowRes: 2048, supersample: 1, ambient: 0.25,
-      ibl: true, iblIntensity: 1,
-      ao: { on: true, radius: 30, intensity: 1.5 },
+      ibl: true, iblIntensity: 0.05,
+      ao: { on: true, radius: 71, intensity: 2.3 },
       bloom: { on: false, strength: 0.35, threshold: 0.85, radius: 0.4 },
       dof: { on: false, focus: 0, aperture: 2, maxblur: 0.01 },
       vignette: { on: false, amount: 1.0 },

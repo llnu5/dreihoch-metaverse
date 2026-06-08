@@ -362,6 +362,8 @@ function resetForm() {
 }
 function startEdit(p) {
   editing = p; chosenFile = null; fileInput.value = '';
+  chosenTextures = []; texInput.value = ''; $('texnames').textContent = '';
+  $('texrow').classList.toggle('hidden', p.type !== 'rhino');   // Textur-Feld bei Rhino sofort zeigen
   $('pname').value = p.name; $('pname').disabled = true;
   $('fname').textContent = 'Neue Datei wählen, um zu überschreiben…';
   $('upload-btn').disabled = true;
