@@ -148,35 +148,40 @@ def layer_name_of(obj):
     try: return sc.doc.Layers[obj.Attributes.LayerIndex].Name
     except: return ''
 
-def meshes_of_object(obj):
-    """Bevorzugt das RENDER-Mesh (hat die korrekten Mapping-UVs gebacken, planar/box/custom)
-    -> Texturen sitzen wie in Rhino. Fallback: selbst vernetzen."""
+def _mesh_brep(g):
+    out = []
+    if isinstance(g, Rhino.Geometry.Brep):
+        ms = Rhino.Geometry.Mesh.CreateFromBrep(g, Rhino.Geometry.MeshingParameters.Default)
+        if ms:
+            for m in ms: out.append(m)
+    elif isinstance(g, Rhino.Geometry.Extrusion):
+        br = g.ToBrep(True)
+        if br:
+            ms = Rhino.Geometry.Mesh.CreateFromBrep(br, Rhino.Geometry.MeshingParameters.Default)
+            if ms:
+                for m in ms: out.append(m)
+    return out
+
+def meshes_of_object(obj, textured=False):
+    """Texturiert -> RENDER-Mesh (korrekte Mapping-UVs). Untexturiert -> CreateFromBrep
+    (robust, auch fuer ungueltige Breps mit kaputtem Render-Mesh)."""
     out = []
     try:
         g = obj.Geometry
         if isinstance(g, Rhino.Geometry.Mesh):
             out.append(g.DuplicateMesh()); return out      # Scan: gebackene UVs behalten
-        # Render-Mesh holen (ggf. erzeugen)
-        rm = obj.GetMeshes(Rhino.Geometry.MeshType.Render)
-        if not rm or len(rm) == 0:
-            try: obj.CreateMeshes(Rhino.Geometry.MeshType.Render, Rhino.Geometry.MeshingParameters.Default, False)
-            except: pass
+        if textured:
             rm = obj.GetMeshes(Rhino.Geometry.MeshType.Render)
-        if rm and len(rm) > 0:
-            for m in rm:
-                if m and m.Vertices.Count > 0: out.append(m.DuplicateMesh())
-            if out: return out
-        # Fallback: selbst vernetzen (rohe Oberflaechen-UVs)
-        if isinstance(g, Rhino.Geometry.Brep):
-            ms = Rhino.Geometry.Mesh.CreateFromBrep(g, Rhino.Geometry.MeshingParameters.Default)
-            if ms:
-                for m in ms: out.append(m)
-        elif isinstance(g, Rhino.Geometry.Extrusion):
-            br = g.ToBrep(True)
-            if br:
-                ms = Rhino.Geometry.Mesh.CreateFromBrep(br, Rhino.Geometry.MeshingParameters.Default)
-                if ms:
-                    for m in ms: out.append(m)
+            if not rm or len(rm) == 0:
+                try: obj.CreateMeshes(Rhino.Geometry.MeshType.Render, Rhino.Geometry.MeshingParameters.Default, False)
+                except: pass
+                rm = obj.GetMeshes(Rhino.Geometry.MeshType.Render)
+            if rm and len(rm) > 0:
+                for m in rm:
+                    if m and m.Vertices.Count > 0: out.append(m.DuplicateMesh())
+                if out: return out
+        # untexturiert ODER kein Render-Mesh -> robust selbst vernetzen
+        out = _mesh_brep(g)
     except Exception as e:
         log('Mesh-Fehler: %s' % e)
     return out
@@ -206,8 +211,7 @@ def collect(raw):
         glass = is_glass_layer(lname); scan = is_scan_layer(lname)
         if not glass and not scan and is_hide_layer(lname):
             stats['hidden'] += 1; return
-        meshes = meshes_of_object(obj)
-        if not meshes: return
+        # Textur zuerst (entscheidet, ob Render-Mesh fuer UVs noetig ist)
         tex_key = None; tex_obj = None
         if not glass:
             tex_obj = material_texture(obj)
@@ -215,6 +219,8 @@ def collect(raw):
                 base = os.path.basename(tex_obj.FileName).lower()
                 if base not in tex_cache: tex_cache[base] = load_resize_jpeg(tex_obj.FileName)
                 if tex_cache.get(base): tex_key = base
+        meshes = meshes_of_object(obj, tex_key is not None)
+        if not meshes: return
         col = material_color(obj)
         for m in meshes:
             if tex_key and tex_obj is not None: bake_uvw(m, tex_obj)   # Repeat/Offset in UVs backen
