@@ -192,20 +192,15 @@ async function convertToGLB(rhinoBytes) {
   });
   rm.forEach((o) => { if (o.parent) o.parent.remove(o); o.geometry && o.geometry.dispose(); });
 
+  // GLB exportieren (plain – meshopt verzerrt diese Geometrie; Kompression via gzip beim Upload)
   const glb = await new Promise((res, rej) => new GLTFExporter().parse(root, res, rej, { binary: true, onlyVisible: false }));
-  let out = new Uint8Array(glb);
-  try {
-    const { WebIO } = await import('https://cdn.jsdelivr.net/npm/@gltf-transform/core/+esm');
-    const fns = await import('https://cdn.jsdelivr.net/npm/@gltf-transform/functions/+esm');
-    const { ALL_EXTENSIONS } = await import('https://cdn.jsdelivr.net/npm/@gltf-transform/extensions/+esm');
-    const { MeshoptEncoder } = await import('https://cdn.jsdelivr.net/npm/meshoptimizer/+esm');
-    await MeshoptEncoder.ready;
-    const io = new WebIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
-    const doc = await io.readBinary(new Uint8Array(glb));
-    await doc.transform(fns.meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
-    out = await io.writeBinary(doc);
-  } catch (e) { console.warn('[admin] Kompression übersprungen (GLB unkomprimiert)', e); }
-  return { glb: out, scanExists };
+  return { glb: new Uint8Array(glb), scanExists };
+}
+
+async function gzipBytes(u8) {
+  const cs = new CompressionStream('gzip');
+  const w = cs.writable.getWriter(); w.write(u8); w.close();
+  return new Uint8Array(await new Response(cs.readable).arrayBuffer());
 }
 
 // Upload: kleine Dateien Standard, große stückweise (resumable/TUS) -> robust & größer
@@ -248,13 +243,15 @@ $('upload-btn').addEventListener('click', async () => {
     try {
       setStatus('Verarbeite Rhino: Blöcke (Stützen etc.) auflösen …');
       const pr = await processRhino(file);
-      setStatus('Konvertiere nach GLB & komprimiere (meshopt) … das kann dauern.');
+      setStatus('Konvertiere nach GLB … das kann dauern.');
       const conv = await convertToGLB(pr.bytes);
       has2d = conv.scanExists;
-      uploadData = new Blob([conv.glb], { type: 'model/gltf-binary' });
-      ext = 'glb';
-      console.log(`[admin BUILD 24] Rhino→GLB: ${pr.added} Solids aufgelöst · ${pr.skipped} versteckte Blöcke übersprungen · 3D_Scan=${has2d} · ${(conv.glb.byteLength / 1048576).toFixed(1)} MB`);
-      setStatus(`Konvertiert: ${(conv.glb.byteLength / 1048576).toFixed(1)} MB GLB. Lade hoch …`);
+      setStatus('Komprimiere (gzip) …');
+      const gz = await gzipBytes(conv.glb);
+      uploadData = new Blob([gz], { type: 'application/gzip' });
+      ext = 'glb.gz';
+      console.log(`[admin BUILD 25] Rhino→GLB: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke übersprungen · 3D_Scan=${has2d} · GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB gzip`);
+      setStatus(`Konvertiert: GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB. Lade hoch …`);
     } catch (e) { setStatus('Konvertierung fehlgeschlagen: ' + (e.message || e)); $('upload-btn').disabled = false; return; }
   }
 
@@ -262,7 +259,8 @@ $('upload-btn').addEventListener('click', async () => {
   const path = `projects/${id}/model.${ext}`;
 
   setStatus(`Lade hoch (${(uploadData.size / 1048576).toFixed(0)} MB) … das kann dauern.`);
-  const upErr = await uploadToStorage(path, uploadData, ext === 'glb' ? 'model/gltf-binary' : (file.type || 'application/zip'));
+  const ct = ext === 'glb.gz' ? 'application/gzip' : (ext === 'glb' ? 'model/gltf-binary' : (file.type || 'application/zip'));
+  const upErr = await uploadToStorage(path, uploadData, ct);
   if (upErr) { setStatus('Upload fehlgeschlagen: ' + upErr); $('upload-btn').disabled = false; return; }
 
   if (editing) {
