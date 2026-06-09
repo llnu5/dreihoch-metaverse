@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Prinzenstraße 85 – 3D Rundgang</title>
+  <title>Dreihoch Metaverse – 3D Walkthrough</title>
   <link rel="icon" href="data:," />
   <style>
     /* ---- Apple-HIG inspirierte Design-Tokens (Dark) ---- */
@@ -140,50 +140,50 @@
     <div class="mark">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"/><path d="M3.7 7.3l8.3 4.7 8.3-4.7M12 12v9.5"/></svg>
     </div>
-    <h1>Prinzenstraße 85 · 3D&nbsp;Rundgang</h1>
-    <div class="sub">Modell wird geladen …</div>
+    <h1>Dreihoch Metaverse · 3D&nbsp;Walkthrough</h1>
+    <div class="sub">Loading model …</div>
     <div class="bar"><i id="barfill"></i></div>
     <div id="pct">0&nbsp;%</div>
   </div>
 
   <div id="topbar">
     <div class="seg">
-      <button class="btn active" id="mode-walk" data-tip="Fliegen" aria-label="Fliegen">
+      <button class="btn active" id="mode-walk" data-tip="Fly" aria-label="Fly">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><path d="M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>
-        <span>Fliegen</span>
+        <span>Fly</span>
       </button>
-      <button class="btn" id="mode-orbit" data-tip="Umkreisen" aria-label="Umkreisen">
+      <button class="btn" id="mode-orbit" data-tip="Orbit" aria-label="Orbit">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10" ry="4.5"/><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/></svg>
-        <span>Umkreisen</span>
+        <span>Orbit</span>
       </button>
     </div>
     <div class="sep"></div>
-    <button class="btn" id="btn-reset" data-tip="Reset" aria-label="Ansicht zurücksetzen">
+    <button class="btn" id="btn-reset" data-tip="Reset" aria-label="Reset view">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v4h4"/></svg>
       <span>Reset</span>
     </button>
   </div>
 
   <div id="hud">
-    <div class="title" id="hud-title"><span>Steuerung</span><span class="toggle">ausblenden</span></div>
+    <div class="title" id="hud-title"><span>Controls</span><span class="toggle">hide</span></div>
     <div class="body">
       <div id="hud-walk">
-        <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> bewegen</div>
-        <div><b>Linke Maustaste ziehen</b> = umsehen</div>
-        <div><span class="key">←</span><span class="key">→</span><span class="key">↑</span><span class="key">↓</span> umsehen (ohne Maus)</div>
-        <div><span class="key">Q</span><span class="key">E</span> runter / hoch</div>
-        <div><span class="key">Shift</span> schneller · <span class="key">Strg</span> langsamer</div>
-        <div class="hint">Auch: rechte Maustaste = umsehen · Mausrad = Tempo</div>
+        <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> move</div>
+        <div><b>Drag left mouse button</b> = look around</div>
+        <div><span class="key">←</span><span class="key">→</span><span class="key">↑</span><span class="key">↓</span> look around (without mouse)</div>
+        <div><span class="key">Q</span><span class="key">E</span> down / up</div>
+        <div><span class="key">Shift</span> faster · <span class="key">Ctrl</span> slower</div>
+        <div class="hint">Also: right mouse button = look around · scroll wheel = speed</div>
       </div>
       <div id="hud-orbit" style="display:none">
-        <div><b>Linke Maustaste</b> ziehen = drehen</div>
-        <div><b>Rechte Maustaste</b> ziehen = verschieben</div>
-        <div>Mausrad = zoomen</div>
+        <div><b>Left mouse button</b> drag = rotate</div>
+        <div><b>Right mouse button</b> drag = pan</div>
+        <div>Scroll wheel = zoom</div>
       </div>
     </div>
   </div>
 
-  <div id="speedbadge" style="display:none">Tempo: <b id="speedval">1.0</b>×</div>
+  <div id="speedbadge" style="display:none">Speed: <b id="speedval">1.0</b>×</div>
   <div id="err"></div>
 
   <script type="importmap">
@@ -198,12 +198,12 @@
   </script>
   <!-- ?v=… = Cache-Busting: bei jeder Code-Änderung die Zahl erhöhen,
        damit Browser garantiert die neue Version laden (kein veralteter Cache). -->
-  <script src="./config.js?v=31"></script>
-  <script type="module" src="./main.js?v=31"></script>
-  <script type="module" src="./comments.js?v=31"></script>
-  <script type="module" src="./measurements.js?v=31"></script>
-  <script type="module" src="./chat.js?v=31"></script>
-  <script type="module" src="./bookmarks.js?v=31"></script>
-  <script type="module" src="./daylight.js?v=31"></script>
+  <script src="./config.js?v=32"></script>
+  <script type="module" src="./main.js?v=32"></script>
+  <script type="module" src="./comments.js?v=32"></script>
+  <script type="module" src="./measurements.js?v=32"></script>
+  <script type="module" src="./chat.js?v=32"></script>
+  <script type="module" src="./bookmarks.js?v=32"></script>
+  <script type="module" src="./daylight.js?v=32"></script>
 </body>
 </html>

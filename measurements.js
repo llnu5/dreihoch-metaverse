@@ -45,8 +45,8 @@ document.head.appendChild(css);
 const topbar = document.getElementById('topbar');
 const btnMeasure = document.createElement('button');
 btnMeasure.className = 'btn';
-btnMeasure.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8" width="19" height="8" rx="1.6"/><path d="M7 8v3M11 8v4.2M15 8v3M19 8v4.2"/></svg><span>Messen</span>`;
-btnMeasure.dataset.tip = 'Messen'; btnMeasure.setAttribute('aria-label', 'Strecke messen');
+btnMeasure.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8" width="19" height="8" rx="1.6"/><path d="M7 8v3M11 8v4.2M15 8v3M19 8v4.2"/></svg><span>Measure</span>`;
+btnMeasure.dataset.tip = 'Measure'; btnMeasure.setAttribute('aria-label', 'Measure distance');
 topbar.appendChild(btnMeasure);
 
 const labelsEl = document.createElement('div');
@@ -55,7 +55,7 @@ document.body.appendChild(labelsEl);
 
 const hint = document.createElement('div');
 hint.id = 'meas-hint';
-hint.textContent = 'Klicke 2 Punkte im Modell, um die Strecke zu messen · Esc bricht ab';
+hint.textContent = 'Click 2 points on the model to measure the distance · Esc cancels';
 document.body.appendChild(hint);
 
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ function disposeObj(o) {
 //  Supabase
 // ---------------------------------------------------------------------------
 async function initBackend() {
-  if (!CONFIGURED) { btnMeasure.title = 'Backend nicht konfiguriert (config.js)'; return; }
+  if (!CONFIGURED) { btnMeasure.title = 'Backend not configured (config.js)'; return; }
   sb = createClient(URL, KEY, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
   const { data, error } = await scope(sb.from('measurements').select('*')).order('created_at');
   if (error) { console.error('[measure] load', error); return; }
@@ -119,10 +119,10 @@ async function initBackend() {
 }
 
 async function createMeasurement(a, b) {
-  const author = localStorage.getItem('cmt_name') || 'Gast';
+  const author = localStorage.getItem('cmt_name') || 'Guest';
   const row = { author, ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, project_id: PID };
   const { data, error } = await sb.from('measurements').insert(row).select().single();
-  if (error) { alert('Messung konnte nicht gespeichert werden: ' + error.message); return; }
+  if (error) { alert('Could not save measurement: ' + error.message); return; }
   addItem(data);
 }
 async function deleteMeasurement(id) {
@@ -141,7 +141,7 @@ function addItem(r) {
   const sa = makeSphere(a), sbp = makeSphere(b);
   const label = document.createElement('div');
   label.className = 'meas-label';
-  label.innerHTML = `<span class="val">${fmt(a.distanceTo(b))}</span><span class="del" title="Messung löschen">×</span>`;
+  label.innerHTML = `<span class="val">${fmt(a.distanceTo(b))}</span><span class="del" title="Delete measurement">×</span>`;
   label.querySelector('.del').addEventListener('click', (e) => { e.stopPropagation(); deleteMeasurement(r.id); });
   labelsEl.appendChild(label);
   items.set(r.id, { id: r.id, a, b, author: r.author, line, sa, sb: sbp, label });
@@ -210,7 +210,7 @@ function setMeasuring(v) {
   if (v) window.dispatchEvent(new CustomEvent('tool:active', { detail: 'measure' }));
 }
 btnMeasure.addEventListener('click', () => {
-  if (!CONFIGURED) { alert('Das Mess-Backend ist noch nicht eingerichtet (SQL in Supabase ausführen).'); return; }
+  if (!CONFIGURED) { alert('The measurement backend is not set up yet (run the SQL in Supabase).'); return; }
   setMeasuring(!measuring);
 });
 window.addEventListener('tool:active', (e) => { if (e.detail !== 'measure' && measuring) setMeasuring(false); });

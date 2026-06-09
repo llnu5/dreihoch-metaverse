@@ -9,7 +9,7 @@
 window.SUPABASE_URL = 'https://jjeoxzbfsnrnwpooabfw.supabase.co';
 window.SUPABASE_ANON_KEY = 'sb_publishable_l4hAdP8VzaJ23vAPnv3BgA_52LkRXta';
 
-// Aktuelles Projekt aus der URL (?p=…). NULL = Standard-/Prinzenstrasse-Projekt.
+// Current project from the URL (?p=…). NULL = default project.
 window.PROJECT_ID = new URLSearchParams(location.search).get('p') || null;
-// Basis-URL fuer oeffentliche Storage-Dateien
+// Base URL for public storage files
 window.STORAGE_BASE = window.SUPABASE_URL + '/storage/v1/object/public/models/';

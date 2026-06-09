@@ -103,8 +103,8 @@ document.head.appendChild(css);
 // ---------------------------------------------------------------------------
 const btn = document.createElement('button');
 btn.className = 'btn';
-btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg><span>Licht</span>`;
-btn.dataset.tip = 'Licht, Qualität & Post-Processing'; btn.setAttribute('aria-label', 'Licht & Post-Processing');
+btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg><span>Light</span>`;
+btn.dataset.tip = 'Light, quality & post-processing'; btn.setAttribute('aria-label', 'Light & post-processing');
 
 function slider(id, label, min, max, step, val, unit) {
   return `<div class="dl-row"><label>${label} <b id="${id}-v"></b></label><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-unit="${unit || ''}"/></div>`;
@@ -116,72 +116,72 @@ function toggle(id, label) {
 const panel = document.createElement('div');
 panel.id = 'dl-panel';
 panel.innerHTML = `
-  <div id="dl-hd"><h2>☀️ Licht & Post-Processing</h2><span class="min" title="Minimieren">–</span></div>
+  <div id="dl-hd"><h2>☀️ Light & Post-Processing</h2><span class="min" title="Minimize">–</span></div>
   <div id="dl-body">
     <div class="dl-sec">
-      <div class="h">Sonne & Licht</div>
-      ${slider('dl-time', 'Tageszeit', 0, 24, 0.25, 14, 'time')}
-      ${slider('dl-north', 'Norden', 0, 360, 1, 0, '°')}
-      ${slider('dl-ambient', 'Umgebungslicht', 0, 2, 0.05, 0.25, '')}
+      <div class="h">Sun & Light</div>
+      ${slider('dl-time', 'Time of day', 0, 24, 0.25, 14, 'time')}
+      ${slider('dl-north', 'North', 0, 360, 1, 0, '°')}
+      ${slider('dl-ambient', 'Ambient light', 0, 2, 0.05, 0.25, '')}
     </div>
 
     <div class="dl-sec">
-      <div class="h">Voreinstellungen</div>
+      <div class="h">Presets</div>
       <div class="dl-seg" id="dl-preset">
-        <button data-q="einfach">Einfach</button><button data-q="mittel">Mittel</button>
-        <button data-q="hoch">Hoch</button><button data-q="ultra">Ultra</button>
+        <button data-q="einfach">Low</button><button data-q="mittel">Medium</button>
+        <button data-q="hoch">High</button><button data-q="ultra">Ultra</button>
       </div>
     </div>
 
     <div class="dl-sec">
       <div class="h">Render</div>
-      ${toggle('dl-shadows', 'Schatten')}
+      ${toggle('dl-shadows', 'Shadows')}
       <div class="dl-sub">
-        <div class="dl-row"><label>Auflösung</label><select id="dl-shadowRes"><option value="1024">1024</option><option value="2048">2048</option><option value="4096">4096</option></select></div>
+        <div class="dl-row"><label>Resolution</label><select id="dl-shadowRes"><option value="1024">1024</option><option value="2048">2048</option><option value="4096">4096</option></select></div>
       </div>
-      <div class="dl-row" style="margin-top:9px"><label>Supersampling</label><select id="dl-supersample"><option value="1">1× (schnell)</option><option value="1.5">1.5×</option><option value="2">2× (scharf)</option></select></div>
+      <div class="dl-row" style="margin-top:9px"><label>Supersampling</label><select id="dl-supersample"><option value="1">1× (fast)</option><option value="1.5">1.5×</option><option value="2">2× (sharp)</option></select></div>
       <div style="height:9px"></div>
-      ${toggle('dl-ibl', 'Umgebungsreflexionen (IBL)')}
-      <div class="dl-sub">${slider('dl-ibl-int', 'Intensität', 0, 2, 0.05, 1, '')}</div>
+      ${toggle('dl-ibl', 'Environment reflections (IBL)')}
+      <div class="dl-sub">${slider('dl-ibl-int', 'Intensity', 0, 2, 0.05, 1, '')}</div>
     </div>
 
     <div class="dl-sec">
       <div class="h">Post-Processing</div>
       ${toggle('dl-ao', 'Ambient Occlusion')}<div class="dl-sub">
         ${slider('dl-ao-radius', 'Radius', 1, 120, 1, 30, '')}
-        ${slider('dl-ao-intensity', 'Stärke', 0, 4, 0.1, 1.5, '')}</div>
+        ${slider('dl-ao-intensity', 'Strength', 0, 4, 0.1, 1.5, '')}</div>
       <div style="height:9px"></div>
-      ${toggle('dl-bloom', 'Bloom (Leuchten)')}<div class="dl-sub">
-        ${slider('dl-bloom-strength', 'Stärke', 0, 2, 0.05, 0.35, '')}
-        ${slider('dl-bloom-threshold', 'Schwelle', 0, 1, 0.01, 0.85, '')}
+      ${toggle('dl-bloom', 'Bloom')}<div class="dl-sub">
+        ${slider('dl-bloom-strength', 'Strength', 0, 2, 0.05, 0.35, '')}
+        ${slider('dl-bloom-threshold', 'Threshold', 0, 1, 0.01, 0.85, '')}
         ${slider('dl-bloom-radius', 'Radius', 0, 1, 0.01, 0.4, '')}</div>
       <div style="height:9px"></div>
-      ${toggle('dl-dof', 'Tiefenschärfe')}<div class="dl-sub">
-        ${slider('dl-dof-focus', 'Fokus', 0, 100, 1, 30, '%')}
-        ${slider('dl-dof-aperture', 'Blende', 0, 10, 0.1, 2, '')}</div>
+      ${toggle('dl-dof', 'Depth of field')}<div class="dl-sub">
+        ${slider('dl-dof-focus', 'Focus', 0, 100, 1, 30, '%')}
+        ${slider('dl-dof-aperture', 'Aperture', 0, 10, 0.1, 2, '')}</div>
       <div style="height:9px"></div>
-      ${toggle('dl-vignette', 'Vignette')}<div class="dl-sub">${slider('dl-vignette-amount', 'Stärke', 0, 2, 0.05, 1, '')}</div>
+      ${toggle('dl-vignette', 'Vignette')}<div class="dl-sub">${slider('dl-vignette-amount', 'Strength', 0, 2, 0.05, 1, '')}</div>
       <div style="height:9px"></div>
-      ${toggle('dl-film', 'Filmkorn')}<div class="dl-sub">${slider('dl-film-intensity', 'Intensität', 0, 1, 0.02, 0.3, '')}</div>
+      ${toggle('dl-film', 'Film grain')}<div class="dl-sub">${slider('dl-film-intensity', 'Intensity', 0, 1, 0.02, 0.3, '')}</div>
     </div>
 
     <div class="dl-sec">
-      <div class="h">Farbe & Tone-Mapping</div>
-      ${slider('dl-brightness', 'Helligkeit', -0.5, 0.5, 0.01, 0, '')}
-      ${slider('dl-contrast', 'Kontrast', -0.5, 0.5, 0.01, 0, '')}
-      ${slider('dl-saturation', 'Sättigung', -1, 1, 0.02, 0, '')}
-      <div class="dl-row"><label>Tone-Mapping</label><select id="dl-tone">
-        <option value="none">Aus</option><option value="linear">Linear</option><option value="reinhard">Reinhard</option>
+      <div class="h">Color & Tone Mapping</div>
+      ${slider('dl-brightness', 'Brightness', -0.5, 0.5, 0.01, 0, '')}
+      ${slider('dl-contrast', 'Contrast', -0.5, 0.5, 0.01, 0, '')}
+      ${slider('dl-saturation', 'Saturation', -1, 1, 0.02, 0, '')}
+      <div class="dl-row"><label>Tone mapping</label><select id="dl-tone">
+        <option value="none">Off</option><option value="linear">Linear</option><option value="reinhard">Reinhard</option>
         <option value="cineon">Cineon</option><option value="aces">ACES (Film)</option><option value="agx">AgX</option></select></div>
-      ${slider('dl-exposure', 'Belichtung', 0.1, 2, 0.05, 0.9, '')}
+      ${slider('dl-exposure', 'Exposure', 0.1, 2, 0.05, 0.9, '')}
     </div>
 
     <div class="dl-sec">
-      <div class="h">Kantenglättung</div>
-      <div class="dl-row"><select id="dl-aa"><option value="off">Aus</option><option value="fxaa">FXAA (schnell)</option><option value="smaa">SMAA (besser)</option></select></div>
+      <div class="h">Anti-aliasing</div>
+      <div class="dl-row"><select id="dl-aa"><option value="off">Off</option><option value="fxaa">FXAA (fast)</option><option value="smaa">SMAA (better)</option></select></div>
     </div>
   </div>
-  <button id="dl-save">Automatisch für alle gespeichert</button>`;
+  <button id="dl-save">Saved automatically for everyone</button>`;
 
 // ---------------------------------------------------------------------------
 //  Sonne / Himmel
@@ -401,7 +401,7 @@ async function persist() {
 }
 function autosave() {
   const b = $('dl-save'); clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => { if (await persist()) { b.textContent = 'Für alle gespeichert ✓'; setTimeout(() => (b.textContent = 'Automatisch für alle gespeichert'), 1500); } }, 600);
+  saveTimer = setTimeout(async () => { if (await persist()) { b.textContent = 'Saved for everyone ✓'; setTimeout(() => (b.textContent = 'Saved automatically for everyone'), 1500); } }, 600);
 }
 
 // ---------------------------------------------------------------------------

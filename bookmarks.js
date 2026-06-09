@@ -81,11 +81,11 @@ topbar.appendChild(btnBm);
 const panel = document.createElement('div');
 panel.id = 'bm-panel';
 panel.innerHTML = `
-  <div id="bm-hd"><h2>🔖 Bookmarks</h2><span class="min" title="Minimieren">–</span></div>
-  <button id="bm-new">+ Neue Bookmark</button>
+  <div id="bm-hd"><h2>🔖 Bookmarks</h2><span class="min" title="Minimize">–</span></div>
+  <button id="bm-new">+ New bookmark</button>
   <div id="bm-form">
-    <input id="bm-name" type="text" maxlength="60" placeholder="Name, z. B. Eingangstür" autocomplete="off" />
-    <div class="row"><button id="bm-cancel">Abbrechen</button><button id="bm-save">Speichern</button></div>
+    <input id="bm-name" type="text" maxlength="60" placeholder="Name, e.g. Front door" autocomplete="off" />
+    <div class="row"><button id="bm-cancel">Cancel</button><button id="bm-save">Save</button></div>
   </div>
   <div id="bm-list"></div>`;
 document.body.appendChild(panel);
@@ -125,10 +125,10 @@ async function saveBookmark() {
   if (!name || !pendingPose) return;
   const p = pendingPose.pos, q = pendingPose.quat;
   formEl.classList.remove('show'); pendingPose = null;
-  if (!sb) { alert('Backend nicht eingerichtet (SQL ausführen).'); return; }
+  if (!sb) { alert('Backend not set up (run the SQL).'); return; }
   const row = { name, px: p.x, py: p.y, pz: p.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, project_id: PID };
   const { data, error } = await sb.from('bookmarks').insert(row).select().single();
-  if (error) { alert('Bookmark fehlgeschlagen: ' + error.message); return; }
+  if (error) { alert('Bookmark failed: ' + error.message); return; }
   bms.set(data.id, data); render();
 }
 async function del(id) {
@@ -147,7 +147,7 @@ function goto(b) {
 // ---------------------------------------------------------------------------
 function render() {
   const arr = [...bms.values()].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-  if (arr.length === 0) { listEl.innerHTML = `<div id="bm-empty">Noch keine Bookmarks.<br>Stelle die gewünschte Ansicht ein und klicke „+ Neue Bookmark".</div>`; return; }
+  if (arr.length === 0) { listEl.innerHTML = `<div id="bm-empty">No bookmarks yet.<br>Set up the view you want and click “+ New bookmark”.</div>`; return; }
   listEl.innerHTML = '';
   for (const b of arr) {
     const it = document.createElement('div');
@@ -156,7 +156,7 @@ function render() {
     go.className = 'go'; go.textContent = '📍 ' + b.name;
     go.addEventListener('click', () => goto(b));
     const del2 = document.createElement('span');
-    del2.className = 'del'; del2.title = 'Bookmark löschen'; del2.textContent = '×';
+    del2.className = 'del'; del2.title = 'Delete bookmark'; del2.textContent = '×';
     del2.addEventListener('click', () => del(b.id));
     it.append(go, del2);
     listEl.appendChild(it);
@@ -167,7 +167,7 @@ function render() {
 //  Supabase
 // ---------------------------------------------------------------------------
 async function init() {
-  if (!CONFIGURED) { btnBm.title = 'Backend nicht konfiguriert'; return; }
+  if (!CONFIGURED) { btnBm.title = 'Backend not configured'; return; }
   sb = createClient(URL, KEY, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
   const { data, error } = await scope(sb.from('bookmarks').select('*')).order('created_at');
   if (error) { console.error('[bookmarks] load', error); return; }

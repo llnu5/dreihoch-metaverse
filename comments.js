@@ -199,11 +199,11 @@ document.head.appendChild(css);
 // ---------------------------------------------------------------------------
 const topbar = document.getElementById('topbar');
 const btnAdd = el('button', 'btn');
-btnAdd.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.7-6.5-10.5A6.5 6.5 0 0 1 18.5 10.5C18.5 15.3 12 21 12 21z"/><circle cx="12" cy="10.2" r="2.4"/></svg><span>Kommentar</span>`;
-btnAdd.dataset.tip = 'Kommentar'; btnAdd.setAttribute('aria-label', 'Kommentar setzen');
+btnAdd.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.7-6.5-10.5A6.5 6.5 0 0 1 18.5 10.5C18.5 15.3 12 21 12 21z"/><circle cx="12" cy="10.2" r="2.4"/></svg><span>Comment</span>`;
+btnAdd.dataset.tip = 'Comment'; btnAdd.setAttribute('aria-label', 'Add comment');
 const btnList = el('button', 'btn');
-btnList.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Liste</span>`;
-btnList.dataset.tip = 'Liste'; btnList.setAttribute('aria-label', 'Kommentarliste');
+btnList.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>List</span>`;
+btnList.dataset.tip = 'List'; btnList.setAttribute('aria-label', 'Comment list');
 const sep = el('div', 'sep');
 topbar.append(sep, btnAdd, btnList);
 
@@ -212,17 +212,17 @@ const pins = el('div'); pins.id = 'cmt-pins'; document.body.appendChild(pins);
 const nameBadge = el('div'); nameBadge.id = 'cmt-name';
 document.body.appendChild(nameBadge);
 
-const hint = el('div'); hint.id = 'cmt-hint'; hint.textContent = 'Klicke eine Stelle im Modell an, um einen Kommentar zu setzen · Esc bricht ab';
+const hint = el('div'); hint.id = 'cmt-hint'; hint.textContent = 'Click a spot on the model to add a comment · Esc cancels';
 document.body.appendChild(hint);
 
 const sidebar = el('div'); sidebar.id = 'cmt-sidebar';
 sidebar.innerHTML = `
   <div class="sb-hd">
-    <div class="row1"><h2>Kommentare</h2><span class="x" id="cmt-sb-x" style="cursor:pointer;color:#8a94a0;font-size:20px">×</span></div>
+    <div class="row1"><h2>Comments</h2><span class="x" id="cmt-sb-x" style="cursor:pointer;color:#8a94a0;font-size:20px">×</span></div>
     <div id="cmt-filter">
-      <button data-f="open" class="on">Offen</button>
-      <button data-f="resolved">Erledigt</button>
-      <button data-f="all">Alle</button>
+      <button data-f="open" class="on">Open</button>
+      <button data-f="resolved">Done</button>
+      <button data-f="all">All</button>
     </div>
   </div>
   <div id="cmt-list"></div>`;
@@ -230,11 +230,11 @@ document.body.appendChild(sidebar);
 
 const modal = el('div'); modal.id = 'cmt-modal';
 modal.innerHTML = `<div class="box">
-  <h3>Wie heißt du?</h3>
-  <p>Dein Name erscheint bei deinen Kommentaren.</p>
-  <input id="cmt-name-input" type="text" maxlength="40" placeholder="z. B. Linus" autocomplete="off" />
+  <h3>What's your name?</h3>
+  <p>Your name appears on your comments.</p>
+  <input id="cmt-name-input" type="text" maxlength="40" placeholder="e.g. Linus" autocomplete="off" />
   <div class="cmt-row" style="margin-top:14px"><div class="cmt-spacer"></div>
-    <button class="cmt-btn primary" id="cmt-name-ok">Weiter</button></div>
+    <button class="cmt-btn primary" id="cmt-name-ok">Continue</button></div>
 </div>`;
 document.body.appendChild(modal);
 
@@ -266,7 +266,7 @@ function el(tag, cls, text) {
 function initial(n) { return (n || '?').trim().charAt(0).toUpperCase() || '?'; }
 // Name -> feste, gut unterscheidbare Farbe (gleicher Name = gleiche Farbe für alle)
 function colorFor(n) {
-  const s = (n || 'Gast').trim().toLowerCase();
+  const s = (n || 'Guest').trim().toLowerCase();
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
   return `hsl(${h}, 68%, 60%)`;
@@ -274,11 +274,11 @@ function colorFor(n) {
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function timeAgo(iso) {
   const s = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return 'gerade eben';
-  const m = Math.floor(s / 60); if (m < 60) return `vor ${m} Min`;
-  const h = Math.floor(m / 60); if (h < 24) return `vor ${h} Std`;
-  const d = Math.floor(h / 24); if (d < 7) return `vor ${d} T`;
-  return new Date(iso).toLocaleDateString('de-DE');
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60); if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24); if (d < 7) return `${d} d ago`;
+  return new Date(iso).toLocaleDateString('en-US');
 }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -308,7 +308,7 @@ document.getElementById('cmt-name-input').addEventListener('keydown', (e) => {
 
 function renderNameBadge() {
   if (name) nameBadge.innerHTML = `<span class="av" style="background:${colorFor(name)}">${esc(initial(name))}</span><span>${esc(name)}</span>`;
-  else nameBadge.innerHTML = `<span class="av">?</span><span>Name festlegen</span>`;
+  else nameBadge.innerHTML = `<span class="av">?</span><span>Set name</span>`;
 }
 nameBadge.addEventListener('click', async () => {
   name = ''; renderNameBadge(); await requireName();
@@ -319,8 +319,8 @@ nameBadge.addEventListener('click', async () => {
 // ---------------------------------------------------------------------------
 async function initBackend() {
   if (!CONFIGURED) {
-    btnAdd.title = 'Backend nicht konfiguriert (config.js)';
-    console.warn('[comments] Supabase nicht konfiguriert – Kommentare deaktiviert. Trage URL/Key in config.js ein.');
+    btnAdd.title = 'Backend not configured (config.js)';
+    console.warn('[comments] Supabase not configured – comments disabled. Add URL/Key in config.js.');
     return;
   }
   sb = createClient(URL, KEY, { realtime: { params: { eventsPerSecond: 5 } } });
@@ -378,15 +378,15 @@ async function createThread(pos, body) {
   const { data, error } = await sb.from('threads')
     .insert({ author: name, body, pos_x: pos.x, pos_y: pos.y, pos_z: pos.z, project_id: PID })
     .select().single();
-  if (error) { alert('Konnte Kommentar nicht speichern: ' + error.message); return; }
+  if (error) { alert('Could not save comment: ' + error.message); return; }
   threads.set(data.id, toThread(data));
   syncPins(); renderList();
-  // Eingabefeld bleibt geschlossen – der neue Pin ist gesetzt; Klick darauf öffnet den Thread.
+  // Input field stays closed – the new pin is placed; clicking it opens the thread.
 }
 async function addReply(threadId, body) {
   const { data, error } = await sb.from('comments')
     .insert({ thread_id: threadId, author: name, body, project_id: PID }).select().single();
-  if (error) { alert('Antwort fehlgeschlagen: ' + error.message); return; }
+  if (error) { alert('Reply failed: ' + error.message); return; }
   const t = threads.get(threadId);
   if (t && !t.comments.some((c) => c.id === data.id)) t.comments.push(data);
   renderList(); openThread(threadId, true);
@@ -395,10 +395,10 @@ async function setResolved(threadId, val) {
   const t = threads.get(threadId); if (t) t.resolved = val;
   syncPins(); renderList(); openThread(threadId, true);
   const { error } = await sb.from('threads').update({ resolved: val }).eq('id', threadId);
-  if (error) { alert('Status fehlgeschlagen: ' + error.message); }
+  if (error) { alert('Status update failed: ' + error.message); }
 }
 async function deleteThread(threadId) {
-  if (!confirm('Diesen Kommentar inkl. Antworten löschen?')) return;
+  if (!confirm('Delete this comment and its replies?')) return;
   threads.delete(threadId); syncPins(); renderList(); closeCard();
   await sb.from('threads').delete().eq('id', threadId);
 }
@@ -480,12 +480,12 @@ function openCompose(pos, screen) {
   pending = { pos };
   card = el('div', 'cmt-card');
   card.innerHTML = `
-    <div class="hd"><span class="ttl">Neuer Kommentar</span><span class="x">×</span></div>
+    <div class="hd"><span class="ttl">New comment</span><span class="x">×</span></div>
     <div class="cmt-foot" style="border-top:0">
-      <textarea placeholder="Kommentar schreiben…"></textarea>
+      <textarea placeholder="Write a comment…"></textarea>
       <div class="cmt-row"><div class="cmt-spacer"></div>
-        <button class="cmt-btn ghost" data-act="cancel">Abbrechen</button>
-        <button class="cmt-btn primary" data-act="send">Kommentieren</button>
+        <button class="cmt-btn ghost" data-act="cancel">Cancel</button>
+        <button class="cmt-btn primary" data-act="send">Comment</button>
       </div>
     </div>`;
   document.body.appendChild(card);
@@ -514,9 +514,9 @@ function openThread(id, keepPos) {
   const msgs = [{ id: '_root', author: t.author, body: t.body, created_at: t.created_at, root: true }, ...t.comments];
   card.innerHTML = `
     <div class="hd">
-      <span class="ttl">${t.resolved ? '✓ Erledigt' : 'Kommentar'}</span>
+      <span class="ttl">${t.resolved ? '✓ Done' : 'Comment'}</span>
       <span style="display:flex;gap:6px;align-items:center">
-        <button class="cmt-btn ${t.resolved ? '' : 'good'}" data-act="resolve" style="padding:4px 9px;font-size:11.5px">${t.resolved ? 'Wieder öffnen' : '✓ Erledigt'}</button>
+        <button class="cmt-btn ${t.resolved ? '' : 'good'}" data-act="resolve" style="padding:4px 9px;font-size:11.5px">${t.resolved ? 'Reopen' : '✓ Done'}</button>
         <span class="x">×</span>
       </span>
     </div>
@@ -525,15 +525,15 @@ function openThread(id, keepPos) {
         <div class="cmt-msg">
           <div class="top"><span class="who">${esc(m.author)}</span>
             <span class="when">${timeAgo(m.created_at)}
-              ${(m.author === name) ? `<span class="del" data-del="${m.id}" data-root="${m.root ? 1 : 0}">löschen</span>` : ''}
+              ${(m.author === name) ? `<span class="del" data-del="${m.id}" data-root="${m.root ? 1 : 0}">delete</span>` : ''}
             </span></div>
           <div class="txt">${esc(m.body)}</div>
         </div>`).join('')}
     </div>
     <div class="cmt-foot">
-      <textarea placeholder="Antworten…"></textarea>
+      <textarea placeholder="Reply…"></textarea>
       <div class="cmt-row"><div class="cmt-spacer"></div>
-        <button class="cmt-btn primary" data-act="reply">Antworten</button></div>
+        <button class="cmt-btn primary" data-act="reply">Reply</button></div>
     </div>`;
   if (!keepPos) placeCard(card, screen);
   const mc = card.querySelector('.cmt-msgs');
@@ -570,13 +570,13 @@ function renderList() {
   const arr = visibleThreads().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const counts = { open: 0, resolved: 0 };
   for (const t of threads.values()) t.resolved ? counts.resolved++ : counts.open++;
-  document.querySelector('#cmt-filter [data-f="open"]').textContent = `Offen (${counts.open})`;
-  document.querySelector('#cmt-filter [data-f="resolved"]').textContent = `Erledigt (${counts.resolved})`;
+  document.querySelector('#cmt-filter [data-f="open"]').textContent = `Open (${counts.open})`;
+  document.querySelector('#cmt-filter [data-f="resolved"]').textContent = `Done (${counts.resolved})`;
 
   if (arr.length === 0) {
     list.innerHTML = `<div id="cmt-empty">${filter === 'open'
-      ? 'Noch keine offenen Kommentare.<br>Klicke auf „💬 Kommentar setzen" und dann ins Modell.'
-      : 'Keine Einträge in dieser Ansicht.'}</div>`;
+      ? 'No open comments yet.<br>Click “💬 Comment” and then on the model.'
+      : 'No entries in this view.'}</div>`;
     return;
   }
   list.innerHTML = '';
@@ -590,8 +590,8 @@ function renderList() {
       </div>
       <div class="snip">${esc(t.body)}</div>
       <div class="meta">
-        ${t.comments.length ? `<span>💬 ${t.comments.length} Antwort${t.comments.length > 1 ? 'en' : ''}</span>` : ''}
-        ${t.resolved ? '<span class="badge">✓ erledigt</span>' : ''}
+        ${t.comments.length ? `<span>💬 ${t.comments.length} ${t.comments.length > 1 ? 'replies' : 'reply'}</span>` : ''}
+        ${t.resolved ? '<span class="badge">✓ done</span>' : ''}
       </div>`;
     it.addEventListener('click', () => { focusThread(t.id); });
     list.appendChild(it);
@@ -618,7 +618,7 @@ function setPlacing(v) {
 // anderes Werkzeug aktiv -> Kommentar-Platzierung beenden
 window.addEventListener('tool:active', (e) => { if (e.detail !== 'comment' && placing) setPlacing(false); });
 btnAdd.addEventListener('click', async () => {
-  if (!CONFIGURED) { alert('Das Kommentar-Backend ist noch nicht eingerichtet (config.js).'); return; }
+  if (!CONFIGURED) { alert('The comment backend is not set up yet (config.js).'); return; }
   if (!placing) await requireName();
   setPlacing(!placing);
 });

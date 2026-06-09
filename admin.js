@@ -16,7 +16,7 @@ const $ = (id) => document.getElementById(id);
 function showPanel() { $('login').classList.add('hidden'); $('panel').classList.remove('hidden'); renderList(); }
 function tryLogin() {
   if ($('pw').value === ADMIN_PW) { sessionStorage.setItem('admin_ok', '1'); showPanel(); }
-  else { $('login-err').textContent = 'Falsches Passwort.'; }
+  else { $('login-err').textContent = 'Wrong password.'; }
 }
 $('login-btn').addEventListener('click', tryLogin);
 $('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
@@ -45,7 +45,7 @@ function typeOf(file) {
   return ext === '3dm' ? 'rhino' : ext === 'zip' ? 'matterport' : null;
 }
 function setFile(file) {
-  if (!typeOf(file)) { alert('Bitte eine .zip (Matterport) oder .3dm (Rhino) Datei wählen.'); return; }
+  if (!typeOf(file)) { alert('Please choose a .zip (Matterport) or .3dm (Rhino) file.'); return; }
   chosenFile = file;
   $('fname').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB · ${typeOf(file) === 'rhino' ? 'Rhino' : 'Matterport'}`;
   // Textur-Feld nur bei Rhino zeigen (Matterport bringt Texturen im ZIP mit)
@@ -68,7 +68,7 @@ function setTextures(fileList) {
   const imgs = chosenTextures.filter((f) => /\.(png|jpe?g|webp|bmp|tga)$/i.test(f.name)).length;
   const zips = chosenTextures.filter((f) => /\.zip$/i.test(f.name)).length;
   $('texnames').textContent = chosenTextures.length
-    ? `${imgs} Bild(er)${zips ? ` + ${zips} ZIP` : ''} gewählt` : '';
+    ? `${imgs} image(s)${zips ? ` + ${zips} ZIP` : ''} selected` : '';
 }
 
 // File[] -> { 'basename.png': ImageBitmap } (entpackt ZIPs)
@@ -307,7 +307,7 @@ async function uploadToStorage(path, data, contentType) {
         chunkSize: 6 * 1024 * 1024,
         metadata: { bucketName: 'models', objectName: path, contentType, cacheControl: '3600' },
         onError: (e) => resolve((e && e.message) || String(e)),
-        onProgress: (sent, total) => setStatus(`Lade hoch … ${Math.round((sent / total) * 100)} % (${(total / 1048576).toFixed(0)} MB)`),
+        onProgress: (sent, total) => setStatus(`Uploading … ${Math.round((sent / total) * 100)} % (${(total / 1048576).toFixed(0)} MB)`),
         onSuccess: () => resolve(null),
       });
       up.findPreviousUploads().then((prev) => { if (prev.length) up.resumeFromPreviousUpload(prev[0]); up.start(); });
@@ -317,8 +317,8 @@ async function uploadToStorage(path, data, contentType) {
 
 $('upload-btn').addEventListener('click', async () => {
   const name = $('pname').value.trim();
-  if (!name) { alert('Bitte Projektnamen eingeben.'); return; }
-  if (!chosenFile) { alert('Bitte Datei wählen.'); return; }
+  if (!name) { alert('Please enter a project name.'); return; }
+  if (!chosenFile) { alert('Please choose a file.'); return; }
   const file = chosenFile, type = typeOf(file);
   $('upload-btn').disabled = true;
 
@@ -327,40 +327,40 @@ $('upload-btn').addEventListener('click', async () => {
   let ext = file.name.split('.').pop().toLowerCase();
   if (type === 'rhino') {
     try {
-      setStatus('Verarbeite Rhino: Blöcke (Stützen etc.) auflösen …');
+      setStatus('Processing Rhino: exploding blocks (columns etc.) …');
       const pr = await processRhino(file);
       let texImages = {};
-      if (chosenTextures.length) { setStatus('Lade Texturen …'); texImages = await buildTexImages(chosenTextures); }
-      setStatus('Konvertiere nach GLB … das kann dauern.');
+      if (chosenTextures.length) { setStatus('Loading textures …'); texImages = await buildTexImages(chosenTextures); }
+      setStatus('Converting to GLB … this can take a while.');
       const conv = await convertToGLB(pr.bytes, texImages);
       has2d = conv.scanExists;
-      setStatus('Komprimiere (gzip) …');
+      setStatus('Compressing (gzip) …');
       const gz = await gzipBytes(conv.glb);
       uploadData = new Blob([gz], { type: 'application/gzip' });
       ext = 'glb.gz';
-      console.log(`[admin BUILD 28] Rhino→GLB: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke übersprungen · 3D_Scan=${has2d} · Texturen ${Object.keys(texImages).length} geladen / ${conv.texApplied} angewandt · GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB gzip`);
-      setStatus(`Konvertiert: GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB. Lade hoch …`);
-    } catch (e) { setStatus('Konvertierung fehlgeschlagen: ' + (e.message || e)); $('upload-btn').disabled = false; return; }
+      console.log(`[admin BUILD 28] Rhino→GLB: ${pr.added} solids · ${pr.skipped} hidden blocks skipped · 3D_Scan=${has2d} · textures ${Object.keys(texImages).length} loaded / ${conv.texApplied} applied · GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB gzip`);
+      setStatus(`Converted: GLB ${(conv.glb.byteLength / 1048576).toFixed(1)} MB → ${(gz.byteLength / 1048576).toFixed(2)} MB. Uploading …`);
+    } catch (e) { setStatus('Conversion failed: ' + (e.message || e)); $('upload-btn').disabled = false; return; }
   }
 
   const id = editing ? editing.id : crypto.randomUUID();
   const path = `projects/${id}/model.${ext}`;
 
-  setStatus(`Lade hoch (${(uploadData.size / 1048576).toFixed(0)} MB) … das kann dauern.`);
+  setStatus(`Uploading (${(uploadData.size / 1048576).toFixed(0)} MB) … this can take a while.`);
   const ct = ext === 'glb.gz' ? 'application/gzip' : (ext === 'glb' ? 'model/gltf-binary' : (file.type || 'application/zip'));
   const upErr = await uploadToStorage(path, uploadData, ct);
-  if (upErr) { setStatus(`Upload fehlgeschlagen (Datei war ${(uploadData.size / 1048576).toFixed(1)} MB): ` + upErr); $('upload-btn').disabled = false; return; }
+  if (upErr) { setStatus(`Upload failed (file was ${(uploadData.size / 1048576).toFixed(1)} MB): ` + upErr); $('upload-btn').disabled = false; return; }
 
   if (editing) {
     const { error } = await sb.from('projects').update({
       type, file_path: path, file_name: file.name, has_2d_scan: has2d, version: (editing.version || 1) + 1,
     }).eq('id', id);
-    if (error) { setStatus('Fehler: ' + error.message); $('upload-btn').disabled = false; return; }
-    setStatus('Projekt aktualisiert ✓ – Annotationen bleiben erhalten.', true);
+    if (error) { setStatus('Error: ' + error.message); $('upload-btn').disabled = false; return; }
+    setStatus('Project updated ✓ – annotations are kept.', true);
   } else {
     const { error } = await sb.from('projects').insert({ id, name, type, file_path: path, file_name: file.name, has_2d_scan: has2d });
-    if (error) { setStatus('Fehler: ' + error.message); $('upload-btn').disabled = false; return; }
-    setStatus('Projekt angelegt ✓', true);
+    if (error) { setStatus('Error: ' + error.message); $('upload-btn').disabled = false; return; }
+    setStatus('Project created ✓', true);
   }
   resetForm(); renderList();
 });
@@ -371,8 +371,8 @@ function resetForm() {
   chosenTextures = []; texInput.value = ''; $('texnames').textContent = ''; $('texrow').classList.add('hidden');
   $('pname').value = ''; $('fname').textContent = ''; $('upload-btn').disabled = true;
   $('pname').disabled = false;
-  $('form-title').textContent = 'Neues Projekt';
-  $('upload-btn').textContent = 'Hochladen & anlegen';
+  $('form-title').textContent = 'New project';
+  $('upload-btn').textContent = 'Upload & create';
   $('cancel-edit').classList.add('hidden');
 }
 function startEdit(p) {
@@ -380,10 +380,10 @@ function startEdit(p) {
   chosenTextures = []; texInput.value = ''; $('texnames').textContent = '';
   $('texrow').classList.toggle('hidden', p.type !== 'rhino');   // Textur-Feld bei Rhino sofort zeigen
   $('pname').value = p.name; $('pname').disabled = true;
-  $('fname').textContent = 'Neue Datei wählen, um zu überschreiben…';
+  $('fname').textContent = 'Choose a new file to overwrite…';
   $('upload-btn').disabled = true;
-  $('form-title').textContent = `„${p.name}" aktualisieren (Annotationen bleiben)`;
-  $('upload-btn').textContent = 'Neue Version hochladen';
+  $('form-title').textContent = `Update “${p.name}” (annotations are kept)`;
+  $('upload-btn').textContent = 'Upload new version';
   $('cancel-edit').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -395,7 +395,7 @@ async function renderList() {
   const list = $('list');
   const { data, error } = await sb.from('projects').select('*').order('created_at', { ascending: false });
   if (error) { list.innerHTML = `<div class="err">${error.message}</div>`; return; }
-  if (!data.length) { list.innerHTML = `<div class="sub">Noch keine Projekte. Lade oben das erste hoch.</div>`; return; }
+  if (!data.length) { list.innerHTML = `<div class="sub">No projects yet. Upload your first one above.</div>`; return; }
   list.innerHTML = '';
   for (const p of data) {
     const el = document.createElement('div'); el.className = 'proj';
@@ -408,14 +408,14 @@ async function renderList() {
         <div class="det"><a href="${link}" target="_blank">${link}</a></div>
       </div>
       <button class="btn sec" data-edit>Update</button>
-      <button class="btn danger" data-del>Löschen</button>`;
+      <button class="btn danger" data-del>Delete</button>`;
     el.querySelector('[data-edit]').addEventListener('click', () => startEdit(p));
     el.querySelector('[data-del]').addEventListener('click', () => del(p));
     list.appendChild(el);
   }
 }
 async function del(p) {
-  if (!confirm(`Projekt „${p.name}" inkl. Datei und allen Annotationen löschen?`)) return;
+  if (!confirm(`Delete project “${p.name}” including its file and all annotations?`)) return;
   if (p.file_path) await sb.storage.from('models').remove([p.file_path]);
   for (const t of ['threads', 'comments', 'measurements', 'bookmarks', 'chat_messages'])
     await sb.from(t).delete().eq('project_id', p.id);

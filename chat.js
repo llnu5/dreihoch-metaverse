@@ -76,11 +76,11 @@ topbar.appendChild(btnChat);
 const panel = document.createElement('div');
 panel.id = 'chat-panel';
 panel.innerHTML = `
-  <div id="chat-hd"><h2>💬 Chat</h2><span class="min" title="Minimieren">–</span></div>
+  <div id="chat-hd"><h2>💬 Chat</h2><span class="min" title="Minimize">–</span></div>
   <div id="chat-msgs"></div>
   <div id="chat-foot">
-    <textarea placeholder="Nachricht schreiben…" maxlength="2000"></textarea>
-    <button id="chat-send">Senden</button>
+    <textarea placeholder="Write a message…" maxlength="2000"></textarea>
+    <button id="chat-send">Send</button>
   </div>`;
 document.body.appendChild(panel);
 
@@ -96,15 +96,15 @@ let open = localStorage.getItem('chat_open') === '1';
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function colorFor(n) {
-  const s = (n || 'Gast').trim().toLowerCase(); let h = 0;
+  const s = (n || 'Guest').trim().toLowerCase(); let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
   return `hsl(${h}, 68%, 64%)`;
 }
 function timeStr(iso) {
   const d = new Date(iso);
-  return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
-function myName() { return localStorage.getItem('cmt_name') || 'Gast'; }
+function myName() { return localStorage.getItem('cmt_name') || 'Guest'; }
 
 function setOpen(v) {
   open = v; panel.classList.toggle('open', v);
@@ -120,7 +120,7 @@ panel.querySelector('.min').addEventListener('click', () => setOpen(false));
 // ---------------------------------------------------------------------------
 function render() {
   const arr = [...msgs.values()].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-  if (arr.length === 0) { msgsEl.innerHTML = `<div id="chat-empty">Noch keine Nachrichten.<br>Schreib die erste!</div>`; return; }
+  if (arr.length === 0) { msgsEl.innerHTML = `<div id="chat-empty">No messages yet.<br>Write the first one!</div>`; return; }
   const nearBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 60;
   msgsEl.innerHTML = '';
   for (const m of arr) {
@@ -128,9 +128,9 @@ function render() {
     el.className = 'chat-m';
     el.innerHTML = `
       <div class="top">
-        <span class="who" style="color:${colorFor(m.author)}">${esc(m.author || 'Gast')}</span>
+        <span class="who" style="color:${colorFor(m.author)}">${esc(m.author || 'Guest')}</span>
         <span class="when">${timeStr(m.created_at)}</span>
-        <span class="del" title="Nachricht löschen">löschen</span>
+        <span class="del" title="Delete message">delete</span>
       </div>
       <div class="body">${esc(m.body)}</div>`;
     el.querySelector('.del').addEventListener('click', () => del(m.id));
@@ -143,7 +143,7 @@ function render() {
 //  Supabase
 // ---------------------------------------------------------------------------
 async function init() {
-  if (!CONFIGURED) { btnChat.title = 'Backend nicht konfiguriert'; return; }
+  if (!CONFIGURED) { btnChat.title = 'Backend not configured'; return; }
   sb = createClient(URL, KEY, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
   const { data, error } = await scope(sb.from('chat_messages').select('*')).order('created_at');
   if (error) { console.error('[chat] load', error); return; }
@@ -164,7 +164,7 @@ async function send() {
   const body = ta.value.trim(); if (!body || !sb) return;
   ta.value = '';
   const { data, error } = await sb.from('chat_messages').insert({ author: myName(), body, project_id: PID }).select().single();
-  if (error) { alert('Senden fehlgeschlagen: ' + error.message); return; }
+  if (error) { alert('Send failed: ' + error.message); return; }
   msgs.set(data.id, data); render(); msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 async function del(id) {

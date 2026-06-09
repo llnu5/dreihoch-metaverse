@@ -153,7 +153,7 @@ function loadGLB(url) {
   litModel = false;
   gltfLoader.load(url, (g) => { const r = g.scene; r.rotateX(-Math.PI / 2); applyUnlit(r); finishLoad(r); },
     (x) => setProgress(x.loaded, x.lengthComputable ? x.total : 0),
-    () => loadError('Fehler beim Laden des Modells. Bitte über HTTPS öffnen, nicht per Doppelklick.'));
+    () => loadError('Failed to load the model. Please open over HTTPS, not via double-click.'));
 }
 
 // --- Matterport-ZIP (OBJ + Texturen direkt im Browser) ---
@@ -161,7 +161,7 @@ const baseName = (p) => p.split(/[\\/]/).pop().toLowerCase();
 async function loadMatterportZip(url) {
   litModel = false;
   try {
-    if (subEl) subEl.textContent = 'Lade & entpacke Scan …';
+    if (subEl) subEl.textContent = 'Loading & unpacking scan …';
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const total = +res.headers.get('content-length') || 0;
@@ -172,8 +172,8 @@ async function loadMatterportZip(url) {
     const files = Object.values(zip.files).filter((f) => !f.dir);
     const objFile = files.find((f) => f.name.toLowerCase().endsWith('.obj'));
     const mtlFile = files.find((f) => f.name.toLowerCase().endsWith('.mtl'));
-    if (!objFile) throw new Error('Keine .obj-Datei im ZIP gefunden.');
-    if (subEl) subEl.textContent = 'Lade Texturen …';
+    if (!objFile) throw new Error('No .obj file found in the ZIP.');
+    if (subEl) subEl.textContent = 'Loading textures …';
     const texUrls = {};
     for (const f of files) if (/\.(jpe?g|png)$/i.test(f.name)) texUrls[baseName(f.name)] = URL.createObjectURL(await f.async('blob'));
     const manager = new THREE.LoadingManager();
@@ -186,13 +186,13 @@ async function loadMatterportZip(url) {
     root.rotateX(-Math.PI / 2);
     applyUnlit(root);
     finishLoad(root);
-  } catch (e) { loadError('Matterport-ZIP konnte nicht geladen werden: ' + e.message); }
+  } catch (e) { loadError('Could not load Matterport ZIP: ' + e.message); }
 }
 
 // --- Rhino .3dm ---
 // Neuer Weg: vorkonvertiertes GLB (gzip), schnell für Kunden, Metadaten gebacken
 async function loadRhinoGLB(url, has2d) {
-  if (subEl) subEl.textContent = 'Lade Modell …';
+  if (subEl) subEl.textContent = 'Loading model …';
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -201,12 +201,12 @@ async function loadRhinoGLB(url, has2d) {
     for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); loaded += value.length; setProgress(loaded, total); }
     let buf = await new Blob(chunks).arrayBuffer();
     if (/\.gz(\?|$)/i.test(url)) {
-      if (subEl) subEl.textContent = 'Entpacke Modell …';
+      if (subEl) subEl.textContent = 'Unpacking model …';
       const ds = new DecompressionStream('gzip'); const w = ds.writable.getWriter(); w.write(new Uint8Array(buf)); w.close();
       buf = await new Response(ds.readable).arrayBuffer();
     }
-    gltfLoader.parse(buf, '', (gltf) => processRhinoGLB(gltf.scene, has2d), (e) => { console.error(e); loadError('GLB-Modell konnte nicht geladen werden.'); });
-  } catch (e) { loadError('Modell konnte nicht geladen werden: ' + e.message); }
+    gltfLoader.parse(buf, '', (gltf) => processRhinoGLB(gltf.scene, has2d), (e) => { console.error(e); loadError('Could not load GLB model.'); });
+  } catch (e) { loadError('Could not load model: ' + e.message); }
 }
 function processRhinoGLB(root, has2d) {
   const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xbfe0ee, metalness: 0, roughness: 0.06, transmission: 0.0, transparent: true, opacity: 0.26, side: THREE.DoubleSide, depthWrite: false });
@@ -240,7 +240,7 @@ function processRhinoGLB(root, has2d) {
 
 function loadRhino(url, has2d) {
   litModel = true;
-  if (subEl) subEl.textContent = 'Lade Rhino-Modell …';
+  if (subEl) subEl.textContent = 'Loading Rhino model …';
   addDaylight();
   if (/\.glb(\.gz)?(\?|$)/i.test(url)) { loadRhinoGLB(url, has2d); return; }   // konvertierte GLB-Projekte (ggf. gzip)
   const rl = new Rhino3dmLoader();
@@ -252,7 +252,7 @@ function loadRhino(url, has2d) {
     finishLoad(root);
     if (has2d && scanGroup) setupScanSwitch();
   }, (x) => setProgress(x.loaded, x.lengthComputable ? x.total : 0),
-     () => loadError('Rhino-Datei (.3dm) konnte nicht geladen werden.'));
+     () => loadError('Could not load Rhino file (.3dm).'));
 }
 
 function rhinoLayerName(obj, layers) {
@@ -324,8 +324,8 @@ function setupScanSwitch() {
   const seg = document.createElement('div'); seg.className = 'seg'; seg.id = 'scan-switch';
   const ICN_CAD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"/><path d="M3.7 7.3l8.3 4.7 8.3-4.7M12 12v9.5"/></svg>`;
   const ICN_SCAN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l1.4-2h7.2L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.4"/></svg>`;
-  seg.innerHTML = `<button class="btn active" data-v="cad" data-tip="3D-Modell (CAD)" aria-label="CAD">${ICN_CAD}<span>CAD</span></button>
-                   <button class="btn" data-v="scan" data-tip="3D-Scan" aria-label="Scan">${ICN_SCAN}<span>Scan</span></button>`;
+  seg.innerHTML = `<button class="btn active" data-v="cad" data-tip="3D Model (CAD)" aria-label="CAD">${ICN_CAD}<span>CAD</span></button>
+                   <button class="btn" data-v="scan" data-tip="3D Scan" aria-label="Scan">${ICN_SCAN}<span>Scan</span></button>`;
   topbar.append(sep, seg);
   seg.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
     const scan = b.dataset.v === 'scan';
@@ -339,19 +339,19 @@ function setupScanSwitch() {
 // --- Entscheiden, was geladen wird ---
 function startLoad() {
   const pid = window.PROJECT_ID;
-  if (!pid) { loadGLB('./model.glb'); return; }   // Standard-Projekt (Prinzenstraße)
+  if (!pid) { loadGLB('./model.glb'); return; }   // default project
   fetch(`${window.SUPABASE_URL}/rest/v1/projects?id=eq.${pid}&select=*`, {
     headers: { apikey: window.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + window.SUPABASE_ANON_KEY },
   }).then((r) => r.json()).then((rows) => {
     const p = rows && rows[0];
-    if (!p) { loadError('Projekt nicht gefunden.'); return; }
+    if (!p) { loadError('Project not found.'); return; }
     projectData = p;
-    document.title = p.name + ' · 3D Rundgang';
+    document.title = p.name + ' · 3D Walkthrough';
     // Versions-Query bricht den CDN-/Browser-Cache nach einem Update auf
     const url = window.STORAGE_BASE + p.file_path + '?v=' + (p.version || 1);
     if (p.type === 'rhino') loadRhino(url, !!p.has_2d_scan);
     else loadMatterportZip(url);
-  }).catch((e) => loadError('Projekt konnte nicht geladen werden: ' + e.message));
+  }).catch((e) => loadError('Could not load project: ' + e.message));
 }
 startLoad();
 
@@ -494,7 +494,7 @@ document.getElementById('btn-reset').addEventListener('click', resetView);
 const hud = document.getElementById('hud');
 document.getElementById('hud-title').addEventListener('click', () => {
   hud.classList.toggle('collapsed');
-  hud.querySelector('.toggle').textContent = hud.classList.contains('collapsed') ? 'anzeigen' : 'ausblenden';
+  hud.querySelector('.toggle').textContent = hud.classList.contains('collapsed') ? 'show' : 'hide';
 });
 
 // ---------------------------------------------------------------------------

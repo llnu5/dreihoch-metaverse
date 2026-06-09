@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin · 3D Projekte</title>
+  <title>Dreihoch Metaverse – Admin</title>
   <link rel="icon" href="data:," />
   <style>
     :root {
@@ -59,41 +59,41 @@
 <body>
   <!-- Login -->
   <div id="login" class="card">
-    <h1>Admin</h1>
-    <div class="sub">3D-Projekte verwalten</div>
-    <label for="pw">Passwort</label>
+    <h1>Dreihoch Metaverse – Admin</h1>
+    <div class="sub">Manage 3D projects</div>
+    <label for="pw">Password</label>
     <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password" />
     <div class="err" id="login-err"></div>
-    <div style="margin-top:14px"><button class="btn" id="login-btn">Anmelden</button></div>
+    <div style="margin-top:14px"><button class="btn" id="login-btn">Sign in</button></div>
   </div>
 
   <!-- Panel -->
   <div id="panel" class="wrap hidden">
     <div class="card">
       <div class="row" style="justify-content:space-between">
-        <div><h1 style="font-size:22px">Projekte <span style="font-size:11px;color:var(--label3);font-weight:400">· Build 30 (Tex 1024)</span></h1><div class="sub" style="margin:0">Matterport-ZIP oder Rhino-.3dm hochladen</div></div>
-        <button class="btn sec" id="logout">Abmelden</button>
+        <div><h1 style="font-size:22px">Projects <span style="font-size:11px;color:var(--label3);font-weight:400">· Build 31</span></h1><div class="sub" style="margin:0">Upload a Matterport ZIP or Rhino .3dm</div></div>
+        <button class="btn sec" id="logout">Sign out</button>
       </div>
     </div>
 
     <div class="card">
-      <h2 id="form-title">Neues Projekt</h2>
-      <label for="pname">Projektname</label>
-      <input id="pname" type="text" placeholder="z. B. Prinzenstraße 85" />
+      <h2 id="form-title">New project</h2>
+      <label for="pname">Project name</label>
+      <input id="pname" type="text" placeholder="e.g. My Project" />
       <div style="height:14px"></div>
       <div class="drop" id="drop">
-        <div><b>Datei wählen</b> oder hierher ziehen</div>
-        <div class="hint">.zip = Matterport-Scan (OBJ + Texturen, <b>ohne</b> cloud.xyz/PDFs zippen!) · .3dm = Rhino-Modell</div>
+        <div><b>Choose file</b> or drag here</div>
+        <div class="hint">.zip = Matterport scan (OBJ + textures, zip <b>without</b> cloud.xyz/PDFs!) · .3dm = Rhino model</div>
         <div class="file" id="fname"></div>
       </div>
       <input id="file" type="file" accept=".zip,.3dm" class="hidden" />
 
       <div id="texrow" class="hidden">
         <div style="height:14px"></div>
-        <label>Texturen (optional, für Rhino-Scan / texturierte Modelle)</label>
+        <label>Textures (optional, for Rhino scans / textured models)</label>
         <div class="drop" id="texdrop" style="padding:18px">
-          <div><b>Textur-Bilder</b> oder ZIP wählen / hierher ziehen</div>
-          <div class="hint">Mehrere .png/.jpg <b>oder</b> ein .zip des Textur-Ordners. Rhino verweist per Dateiname (z. B. <code>001.png</code>) – ich ordne sie automatisch zu.</div>
+          <div><b>Choose texture images</b> or a ZIP / drag here</div>
+          <div class="hint">Several .png/.jpg files <b>or</b> one .zip of the texture folder. Rhino references them by file name (e.g. <code>001.png</code>) – they're matched automatically.</div>
           <div class="file" id="texnames"></div>
         </div>
         <input id="texfiles" type="file" accept="image/*,.zip" multiple class="hidden" />
@@ -102,14 +102,14 @@
       <div class="pbar" id="pbar"><i></i></div>
       <div id="status"></div>
       <div class="row" style="margin-top:14px">
-        <button class="btn" id="upload-btn" disabled>Hochladen &amp; anlegen</button>
-        <button class="btn sec hidden" id="cancel-edit">Abbrechen</button>
+        <button class="btn" id="upload-btn" disabled>Upload &amp; create</button>
+        <button class="btn sec hidden" id="cancel-edit">Cancel</button>
       </div>
     </div>
 
     <div class="card">
-      <h2>Vorhandene Projekte</h2>
-      <div id="list"><div class="sub">Lade…</div></div>
+      <h2>Existing projects</h2>
+      <div id="list"><div class="sub">Loading…</div></div>
     </div>
   </div>
 
@@ -121,7 +121,7 @@
     }
   }
   </script>
-  <script src="./config.js?v=30"></script>
-  <script type="module" src="./admin.js?v=30"></script>
+  <script src="./config.js?v=32"></script>
+  <script type="module" src="./admin.js?v=32"></script>
 </body>
 </html>
