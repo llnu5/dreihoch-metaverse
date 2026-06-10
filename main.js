@@ -50,7 +50,7 @@ let mode = 'walk';            // 'walk' | 'orbit'
 let lensMM = 40;
 const lensToFov = (mm) => 2 * Math.atan(12 / mm) * 180 / Math.PI;
 function applyLens(mm) {
-  lensMM = Math.max(25, Math.min(150, mm));
+  lensMM = Math.max(20, Math.min(150, mm));
   camera.fov = lensToFov(lensMM);
   camera.updateProjectionMatrix();
 }
@@ -354,8 +354,8 @@ function setupLensControl() {
 
   const pop = document.createElement('div'); pop.id = 'lens-pop';
   pop.innerHTML = '<div class="row"><span>Focal length</span><b id="lens-val">40 mm</b></div>' +
-    '<input id="lens-slider" type="range" min="25" max="150" step="1" value="40">' +
-    '<div class="ticks"><span>25</span><span>40</span><span>85</span><span>150</span></div>';
+    '<input id="lens-slider" type="range" min="20" max="150" step="1" value="40">' +
+    '<div class="ticks"><span>20</span><span>40</span><span>85</span><span>150</span></div>';
   document.body.appendChild(pop);
   const slider = pop.querySelector('#lens-slider'), valEl = pop.querySelector('#lens-val');
   slider.addEventListener('input', () => { const mm = +slider.value; applyLens(mm); valEl.textContent = mm + ' mm'; });
