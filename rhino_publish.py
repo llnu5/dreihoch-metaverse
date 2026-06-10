@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.1'   # bump on every change so the user can see which build is running
+PLUGIN_VERSION = '1.2'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://jjeoxzbfsnrnwpooabfw.supabase.co'
 SUPABASE_KEY = 'sb_publishable_l4hAdP8VzaJ23vAPnv3BgA_52LkRXta'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
@@ -491,7 +491,20 @@ def storage_delete(path):
 def capture_camera():
     """Aktive Rhino-Kamera -> Viewer-Szene (Z-up cm -> Meter, rotateX(-90): (x,y,z)->(x,z,-y))."""
     try:
-        vp = sc.doc.Views.ActiveView.ActiveViewport
+        doc = sc.doc
+        # Startkamera = Perspektiv-Ansicht (aktive Ansicht nur, wenn sie selbst perspektivisch ist)
+        active = doc.Views.ActiveView.ActiveViewport
+        vp = active if active.IsPerspectiveProjection else None
+        if vp is None:
+            persp = None
+            for view in doc.Views:
+                v = view.ActiveViewport
+                if v.IsPerspectiveProjection:
+                    if v.Name == 'Perspective':
+                        persp = v; break
+                    if persp is None:
+                        persp = v
+            vp = persp or active
         loc = vp.CameraLocation; d = vp.CameraDirection
         f = Rhino.RhinoMath.UnitScale(sc.doc.ModelUnitSystem, Rhino.UnitSystem.Meters)
         def conv(p): return [round(p.X*f, 4), round(p.Z*f, 4), round(-p.Y*f, 4)]
