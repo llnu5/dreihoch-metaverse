@@ -420,7 +420,15 @@ let sb = null, saveTimer = null;
 async function persist() {
   if (!CONFIGURED || !PID) return false;
   if (!sb) sb = createClient(URL, KEY, { auth: { persistSession: false } });
-  const { error } = await sb.from('projects').update({ settings: { time: cfg.time, north: cfg.north, post: cfg.post } }).eq('id', PID);
+  // WICHTIG: bestehende settings lesen und nur die Daylight-Felder ueberschreiben,
+  // damit start_camera (Rhino-Startansicht) & andere Keys NICHT verloren gehen.
+  let existing = {};
+  try {
+    const { data } = await sb.from('projects').select('settings').eq('id', PID).single();
+    if (data && data.settings && typeof data.settings === 'object') existing = data.settings;
+  } catch (e) {}
+  const merged = { ...existing, time: cfg.time, north: cfg.north, post: cfg.post };
+  const { error } = await sb.from('projects').update({ settings: merged }).eq('id', PID);
   return !error;
 }
 function autosave() {
