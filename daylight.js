@@ -7,7 +7,6 @@
 // ===========================================================================
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -293,6 +292,25 @@ function buildComposer() {
 function applyAmbient() { if (amb) amb.intensity = cfg.post.ambient; }
 
 // IBL: Umgebungskarte aus dem aktuellen Himmel erzeugen -> Reflexionen + Fülllicht
+function buildReflectionEnv() {
+  // Helle, weiche Gradient-Umgebung (Zenit hell -> Horizont mittel -> Boden dunkler).
+  // Reflektiert auf Metall als sauberer Hell-Dunkel-Verlauf statt dunkler Studio-Strips.
+  const c = document.createElement('canvas'); c.width = 8; c.height = 256;
+  const ctx = c.getContext('2d');
+  const grd = ctx.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0.00, '#ffffff');
+  grd.addColorStop(0.42, '#eef3f7');
+  grd.addColorStop(0.50, '#cfd5db');
+  grd.addColorStop(0.52, '#9aa0a6');
+  grd.addColorStop(1.00, '#5f6266');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, 8, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const rt = pmrem.fromEquirectangular(tex);
+  tex.dispose();
+  return rt;
+}
 function updateEnvironment() {
   if (!pmrem) return;
   // Reflexionsquelle ist IMMER die neutrale Studio-Umgebung (unabhängig von der Tageszeit).
@@ -307,9 +325,9 @@ function applyEnvIntensity() {
     (Array.isArray(o.material) ? o.material : [o.material]).forEach((mat) => {
       if (!mat || !('envMapIntensity' in mat)) return;
       const metalness = ('metalness' in mat && typeof mat.metalness === 'number') ? mat.metalness : 0;
-      // Metall reflektiert die Studio-Umgebung VOLL und unabhängig vom Regler
+      // Metall reflektiert die helle Studio-Umgebung VOLL und unabhängig vom Regler
       // (sonst schwarz/ausgebrannt). Matte Flächen: nur dezenter Glanz über den Regler.
-      mat.envMapIntensity = Math.max(fill, metalness);
+      mat.envMapIntensity = Math.max(fill, metalness * 1.3);
     });
   });
 }
@@ -421,7 +439,7 @@ function buildRig() {
   envScene = new THREE.Scene(); envSky = new Sky(); envSky.scale.setScalar(100); envScene.add(envSky);
   pmrem = new THREE.PMREMGenerator(renderer); pmrem.compileEquirectangularShader();
   if (roomEnvRT) roomEnvRT.dispose();
-  roomEnvRT = pmrem.fromScene(new RoomEnvironment(), 0.04);   // neutrale Reflexionskarte, einmalig
+  roomEnvRT = buildReflectionEnv();   // helle, weiche Umgebung -> Metall sieht aus wie poliertes Blech
   const g = new THREE.Mesh(new THREE.PlaneGeometry(bounds.radius * 8, bounds.radius * 8), new THREE.ShadowMaterial({ opacity: 0.32 }));
   g.rotation.x = -Math.PI / 2; g.position.set(bounds.center.x, bounds.box.min.y - bounds.radius * 0.001, bounds.center.z);
   g.receiveShadow = true; ground = g; scene.add(g);
