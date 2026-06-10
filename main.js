@@ -570,12 +570,19 @@ let cameraMoved = false;        // Kamera hat sich diesen Frame bewegt (für Pfa
 const _prevCamPos = new THREE.Vector3();
 const _prevCamQuat = new THREE.Quaternion();
 
-// NDC (-1..1) -> Treffer auf dem Modell oder null
+// Objekt + alle Eltern wirklich sichtbar? (Raycast trifft sonst versteckte Gruppen, z. B. Scan im CAD-Modus)
+function _allVisible(o) {
+  while (o) { if (o.visible === false) return false; o = o.parent; }
+  return true;
+}
+
+// NDC (-1..1) -> Treffer auf SICHTBARER Modell-Geometrie oder null
 function raycastModel(ndcX, ndcY) {
   if (!model) return null;
   _ray.setFromCamera({ x: ndcX, y: ndcY }, camera);
   const hits = _ray.intersectObject(model, true);
-  return hits.length ? hits[0] : null;
+  for (let i = 0; i < hits.length; i++) { if (_allVisible(hits[i].object)) return hits[i]; }
+  return null;
 }
 
 // 3D-Weltpunkt -> Bildschirmkoordinaten (px) + Sichtbarkeit
@@ -597,7 +604,11 @@ function isOccluded(point) {
   dir.divideScalar(len);
   _ray.set(camera.position, dir);
   const hits = _ray.intersectObject(model, true);
-  return hits.length > 0 && hits[0].distance < len - 0.18;
+  for (let i = 0; i < hits.length; i++) {
+    if (!_allVisible(hits[i].object)) continue;     // versteckte Geometrie (Scan im CAD-Modus) ignorieren
+    return hits[i].distance < len - 0.18;
+  }
+  return false;
 }
 
 // Kamera sanft zu einer Stelle bewegen und sie anschauen
