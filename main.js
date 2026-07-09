@@ -146,8 +146,8 @@ function finishLoad(root) {
   } catch (e) {}
   applyLens(40);                 // Start-Brennweite immer 40 mm
   setupLensControl();
-  baseSpeed = Math.max(0.6, modelRadius * 0.12);
-  camera.near = Math.max(0.01, modelRadius * 0.002);
+  baseSpeed = Math.max(0.35, modelRadius * 0.04);   // Standard-Fluggeschwindigkeit deutlich niedriger (Mausrad regelt live)
+  camera.near = 0.4;                                 // Near-Clipping fix 40 cm (nicht mehr modellabhängig ~1-2 m)
   camera.far = modelRadius * 60;
   camera.updateProjectionMatrix();
   resetView();
