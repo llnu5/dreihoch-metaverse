@@ -105,6 +105,7 @@ let open = false;
 function setOpen(v) { open = v; panel.classList.toggle('open', v); btnBm.classList.toggle('active', v); }
 btnBm.addEventListener('click', () => setOpen(!open));
 panel.querySelector('.min').addEventListener('click', () => setOpen(false));
+setOpen(true);   // Bookmark-Liste standardmäßig offen beim Laden
 
 // ---------------------------------------------------------------------------
 //  Anlegen
