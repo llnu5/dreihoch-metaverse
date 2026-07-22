@@ -557,10 +557,10 @@ function openThread(id, keepPos) {
   syncPins();
 }
 
-// Pin/Liste anklicken -> hinfliegen + öffnen
+// Pin/Liste anklicken -> nur öffnen, KEINE Kamerafahrt
+// (Kommentare liegen oft in Wänden/Decken – Hinfliegen landete im Nichts)
 function focusThread(id) {
   const t = threads.get(id); if (!t) return;
-  if (viewer) viewer.flyTo(t.pos);
   openThread(id);
 }
 

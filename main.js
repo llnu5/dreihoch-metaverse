@@ -146,7 +146,6 @@ function finishLoad(root) {
   } catch (e) {}
   applyLens(40);                 // Start-Brennweite immer 40 mm
   setupLensControl();
-  baseSpeed = Math.max(0.35, modelRadius * 0.04);   // Standard-Fluggeschwindigkeit deutlich niedriger (Mausrad regelt live)
   camera.near = 0.4;                                 // Near-Clipping fix 40 cm (nicht mehr modellabhängig ~1-2 m)
   camera.far = modelRadius * 60;
   camera.updateProjectionMatrix();
@@ -443,8 +442,16 @@ orbit.enabled = false;
 // ---------------------------------------------------------------------------
 const keys = Object.create(null);
 let looking = false;
-let baseSpeed = 1.5;          // wird nach Laden an Modellgröße angepasst
-let speedMult = 1.0;          // per Mausrad einstellbar
+// Fluggeschwindigkeit: 4 feste, realistische Stufen (Twinmotion-Stil, Tasten 1–4).
+// Absolute m/s – nicht mehr an die Modellgröße gekoppelt.
+const SPEED_PRESETS = [
+  { name: 'Slow',    v: 0.7 },   // 1 – langsam, Details betrachten
+  { name: 'Walking', v: 1.5 },   // 2 – normales Gehtempo (Standard)
+  { name: 'Fast',    v: 4.0 },   // 3 – zügig durch den Raum
+  { name: 'Fly',     v: 10.0 },  // 4 – Überflug / große Distanzen
+];
+const DEFAULT_SPEED = 1;
+let speedIdx = DEFAULT_SPEED;
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
 const dom = renderer.domElement;
@@ -507,14 +514,8 @@ window.addEventListener('pointermove', (e) => {
 });
 window.addEventListener('pointerup', () => { dragLook = null; });
 
-// Mausrad -> Tempo (im Fly-Modus). Orbit nutzt das Rad selbst zum Zoomen.
-dom.addEventListener('wheel', (e) => {
-  if (mode !== 'walk') return;
-  e.preventDefault();
-  speedMult *= e.deltaY < 0 ? 1.12 : 0.89;
-  speedMult = Math.max(0.1, Math.min(12, speedMult));
-  document.getElementById('speedval').textContent = speedMult.toFixed(1);
-}, { passive: false });
+// Mausrad im Fly-Modus: nichts (Tempo läuft über die Stufen 1–4). Orbit zoomt selbst.
+dom.addEventListener('wheel', (e) => { if (mode === 'walk') e.preventDefault(); }, { passive: false });
 
 // Tastatureingaben in Textfeldern (Kommentare) dürfen die Kamera NICHT bewegen.
 function isTyping() {
@@ -526,6 +527,9 @@ window.addEventListener('keydown', (e) => {
   if (isTyping()) return;
   keys[e.code] = true;
   if (e.code === 'KeyR') resetView();
+  // Tasten 1–4 (auch Ziffernblock) -> Geschwindigkeitsstufe
+  const m = /^(?:Digit|Numpad)([1-4])$/.exec(e.code);
+  if (m) { e.preventDefault(); setSpeed(+m[1] - 1); }
 });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -536,6 +540,19 @@ window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; }
 const btnWalk = document.getElementById('mode-walk');
 const btnOrbit = document.getElementById('mode-orbit');
 const speedBadge = document.getElementById('speedbadge');
+
+// Geschwindigkeitsstufe setzen (Tasten 1–4 oder Klick im Controls-Panel)
+function setSpeed(i) {
+  speedIdx = Math.max(0, Math.min(SPEED_PRESETS.length - 1, i));
+  const p = SPEED_PRESETS[speedIdx];
+  const val = document.getElementById('speedval');
+  if (val) val.textContent = `${p.name} · ${p.v.toFixed(1)} m/s`;
+  document.querySelectorAll('#hud-speed .spd').forEach((b, n) => b.classList.toggle('on', n === speedIdx));
+}
+// Stufen im Controls-Panel anklickbar
+document.querySelectorAll('#hud-speed .spd').forEach((b, n) => {
+  b.addEventListener('click', (e) => { e.stopPropagation(); setSpeed(n); renderer.domElement.focus(); });
+});
 
 function setMode(m) {
   mode = m;
@@ -559,8 +576,7 @@ btnOrbit.addEventListener('click', () => setMode('orbit'));
 function resetView() {
   camera.position.copy(home.pos);
   camera.lookAt(home.target);
-  speedMult = 1.0;
-  document.getElementById('speedval').textContent = '1.0';
+  setSpeed(DEFAULT_SPEED);
   if (mode === 'orbit') { orbit.target.copy(modelCenter); orbit.update(); }
 }
 document.getElementById('btn-reset').addEventListener('click', resetView);
@@ -695,7 +711,7 @@ function animate() {
   if (tween) updateTween(dt);
 
   if (mode === 'walk' && model && !isTyping() && !tween) {
-    let speed = baseSpeed * speedMult;
+    let speed = SPEED_PRESETS[speedIdx].v;
     if (keys['ShiftLeft'] || keys['ShiftRight']) speed *= 3.0;
     if (keys['ControlLeft'] || keys['ControlRight']) speed *= 0.3;
 

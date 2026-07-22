@@ -64,6 +64,11 @@
       border: 1px solid rgba(255,255,255,.1); border-bottom-color: rgba(0,0,0,.45);
       border-radius: 6px; box-shadow: 0 1px 0 rgba(0,0,0,.4); font: 600 11px var(--font); color: var(--label); }
     #hud .hint { color: var(--label3); margin-top: 8px; font-size: 11.5px; }
+    /* Geschwindigkeitsstufen 1–4: anklickbar, aktive Stufe hervorgehoben */
+    #hud .key.spd { cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+    #hud .key.spd:hover { background: linear-gradient(#4a4a4e,#3a3a3d); color: #fff; }
+    #hud .key.spd.on { background: linear-gradient(#0a84ff,#0a6fd8); border-color: rgba(255,255,255,.3);
+      color: #fff; box-shadow: 0 0 0 2px rgba(10,132,255,.28); }
     #hud.collapsed .body { display: none; }
     #hud .title { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer;
       font-weight: 600; color: var(--label); font-size: 13px; }
@@ -173,7 +178,8 @@
         <div><span class="key">←</span><span class="key">→</span><span class="key">↑</span><span class="key">↓</span> look around (without mouse)</div>
         <div><span class="key">Q</span><span class="key">E</span> down / up</div>
         <div><span class="key">Shift</span> faster · <span class="key">Ctrl</span> slower</div>
-        <div class="hint">Also: right mouse button = look around · scroll wheel = speed</div>
+        <div id="hud-speed"><span class="key spd" title="Slow · 0.7 m/s">1</span><span class="key spd" title="Walking · 1.5 m/s">2</span><span class="key spd" title="Fast · 4 m/s">3</span><span class="key spd" title="Fly · 10 m/s">4</span> speed (click or press)</div>
+        <div class="hint">Also: right mouse button = look around</div>
       </div>
       <div id="hud-orbit" style="display:none">
         <div><b>Left mouse button</b> drag = rotate</div>
@@ -183,7 +189,7 @@
     </div>
   </div>
 
-  <div id="speedbadge" style="display:none">Speed: <b id="speedval">1.0</b>×</div>
+  <div id="speedbadge" style="display:none">Speed: <b id="speedval">Walking · 1.5 m/s</b></div>
   <div id="err"></div>
 
   <script type="importmap">
@@ -198,12 +204,12 @@
   </script>
   <!-- ?v=… = Cache-Busting: bei jeder Code-Änderung die Zahl erhöhen,
        damit Browser garantiert die neue Version laden (kein veralteter Cache). -->
-  <script src="./config.js?v=45"></script>
-  <script type="module" src="./main.js?v=45"></script>
-  <script type="module" src="./comments.js?v=45"></script>
-  <script type="module" src="./measurements.js?v=45"></script>
-  <script type="module" src="./chat.js?v=45"></script>
-  <script type="module" src="./bookmarks.js?v=45"></script>
-  <script type="module" src="./daylight.js?v=45"></script>
+  <script src="./config.js?v=46"></script>
+  <script type="module" src="./main.js?v=46"></script>
+  <script type="module" src="./comments.js?v=46"></script>
+  <script type="module" src="./measurements.js?v=46"></script>
+  <script type="module" src="./chat.js?v=46"></script>
+  <script type="module" src="./bookmarks.js?v=46"></script>
+  <script type="module" src="./daylight.js?v=46"></script>
 </body>
 </html>
