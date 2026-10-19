@@ -73,8 +73,10 @@ create table if not exists public.projects (
   file_name   text,
   has_2d_scan boolean not null default false,
   version     int not null default 1,
+  settings    jsonb not null default '{}'::jsonb,   -- start_camera + Daylight/Post-Settings
   created_at  timestamptz not null default now()
 );
+alter table public.projects add column if not exists settings jsonb not null default '{}'::jsonb;
 alter table public.projects enable row level security;
 drop policy if exists projects_all on public.projects;
 create policy projects_all on public.projects for all using (true) with check (true);
