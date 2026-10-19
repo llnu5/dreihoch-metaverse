@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.4'   # bump on every change so the user can see which build is running
+PLUGIN_VERSION = '1.5'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://static.63.89.13.49.clients.your-server.de'   # self-hosted (Hetzner / dreihoch-ops)
 SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNDA2NDM4LCJleHAiOjE5NTAwODY0Mzh9.Muyz13I6F-ZRs3Waez3lGAEqtBjM41QZhumgr5A-CSY'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
@@ -639,8 +639,8 @@ def export_and_upload(name, pid, version, budget, texmax, use_tex, use_mat, exis
         if not renderables: return (False, 'No meshes after merge.', 0, None)
         st('Building GLB ...'); glb = build_glb(renderables, tex_cache)
         st('Compressing (gzip) ...'); gz = gzip_bytes(glb); mb = len(gz) / 1048576.0
-        if mb > 50:
-            return (False, 'File %.1f MB > 50 MB (Supabase Free).\nChoose a smaller budget/texture, or turn textures off.' % mb, mb, None)
+        if mb > 500:
+            return (False, 'File %.1f MB > 500 MB (server limit).\nChoose a smaller budget/texture, or turn textures off.' % mb, mb, None)
         settings = dict(existing_settings) if isinstance(existing_settings, dict) else {}
         if cam: settings['start_camera'] = cam
         path = 'projects/%s/model.glb.gz' % pid
@@ -729,8 +729,8 @@ def do_publish():
     log('Building GLB ...'); glb=build_glb(renderables, tex_cache)
     gz=gzip_bytes(glb); mb=len(gz)/1048576.0
     log('Upload size %.1f MB' % mb)
-    if mb > 50:
-        rs.MessageBox('File is %.1f MB > 50 MB (Supabase Free will reject).\nChoose a smaller polygon budget / texture, or turn textures off.' % mb,0,'Too large'); return
+    if mb > 500:
+        rs.MessageBox('File is %.1f MB > 500 MB (server limit).\nChoose a smaller polygon budget / texture, or turn textures off.' % mb,0,'Too large'); return
 
     path='projects/%s/model.glb.gz' % pid
     log('Uploading ...'); err=storage_upload(path, gz, 'application/gzip')
