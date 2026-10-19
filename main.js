@@ -197,7 +197,7 @@ async function loadMatterportZip(url) {
     root.rotateX(-Math.PI / 2);
     applyUnlit(root);
     finishLoad(root);
-  } catch (e) { loadError('Could not load Matterport ZIP: ' + e.message); }
+  } catch (e) { loadError('Could not load 3D Scan: ' + e.message); }
 }
 
 // --- Rhino .3dm ---

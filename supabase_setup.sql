@@ -80,7 +80,32 @@ drop policy if exists projects_all on public.projects;
 create policy projects_all on public.projects for all using (true) with check (true);
 alter publication supabase_realtime add table public.projects;
 
--- project_id an alle Annotationen (NULL = Standard-/Prinzenstrasse-Projekt)
+-- Bookmarks (benannte Kamera-Ansichten) + Chat
+create table if not exists public.bookmarks (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  px double precision, py double precision, pz double precision,
+  qx double precision, qy double precision, qz double precision, qw double precision,
+  project_id uuid,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  author text,
+  body text not null,
+  project_id uuid,
+  created_at timestamptz not null default now()
+);
+alter table public.bookmarks     enable row level security;
+alter table public.chat_messages enable row level security;
+drop policy if exists bookmarks_all on public.bookmarks;
+drop policy if exists chat_all      on public.chat_messages;
+create policy bookmarks_all on public.bookmarks     for all using (true) with check (true);
+create policy chat_all      on public.chat_messages for all using (true) with check (true);
+alter publication supabase_realtime add table public.bookmarks;
+alter publication supabase_realtime add table public.chat_messages;
+
+-- project_id an alle Annotationen (NULL = ohne Projekt)
 alter table public.threads       add column if not exists project_id uuid;
 alter table public.comments      add column if not exists project_id uuid;
 alter table public.measurements  add column if not exists project_id uuid;

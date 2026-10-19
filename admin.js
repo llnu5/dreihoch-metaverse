@@ -45,9 +45,9 @@ function typeOf(file) {
   return ext === '3dm' ? 'rhino' : ext === 'zip' ? 'matterport' : null;
 }
 function setFile(file) {
-  if (!typeOf(file)) { alert('Please choose a .zip (Matterport) or .3dm (Rhino) file.'); return; }
+  if (!typeOf(file)) { alert('Please choose a .zip (3D Scan) or .3dm (Rhino) file.'); return; }
   chosenFile = file;
-  $('fname').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB · ${typeOf(file) === 'rhino' ? 'Rhino' : 'Matterport'}`;
+  $('fname').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB · ${typeOf(file) === 'rhino' ? 'Rhino' : '3D Scan'}`;
   // Textur-Feld nur bei Rhino zeigen (Matterport bringt Texturen im ZIP mit)
   $('texrow').classList.toggle('hidden', typeOf(file) !== 'rhino');
   $('upload-btn').disabled = false;
@@ -404,7 +404,7 @@ async function renderList() {
       <div class="ic">${p.type === 'rhino' ? '◳' : '⬢'}</div>
       <div class="meta">
         <div class="nm">${escapeHtml(p.name)}${p.has_2d_scan ? '<span class="tag">3D_Scan</span>' : ''}</div>
-        <div class="det">${p.type === 'rhino' ? 'Rhino' : 'Matterport'} · v${p.version} · ${escapeHtml(p.file_name || '')}</div>
+        <div class="det">${p.type === 'rhino' ? 'Rhino' : '3D Scan'} · v${p.version} · ${escapeHtml(p.file_name || '')}</div>
         <div class="det"><a href="${link}" target="_blank">${link}</a></div>
       </div>
       <button class="btn sec" data-edit>Update</button>

@@ -36,9 +36,9 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.3'   # bump on every change so the user can see which build is running
-SUPABASE_URL = 'https://jjeoxzbfsnrnwpooabfw.supabase.co'
-SUPABASE_KEY = 'sb_publishable_l4hAdP8VzaJ23vAPnv3BgA_52LkRXta'
+PLUGIN_VERSION = '1.4'   # bump on every change so the user can see which build is running
+SUPABASE_URL = 'https://static.63.89.13.49.clients.your-server.de'   # self-hosted (Hetzner / dreihoch-ops)
+SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNDA2NDM4LCJleHAiOjE5NTAwODY0Mzh9.Muyz13I6F-ZRs3Waez3lGAEqtBjM41QZhumgr5A-CSY'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
 REST_BASE    = SUPABASE_URL + '/rest/v1'
 WEB_BASE     = 'https://llnu5.github.io/dreihoch-metaverse/'
