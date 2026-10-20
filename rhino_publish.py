@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.5'   # bump on every change so the user can see which build is running
+PLUGIN_VERSION = '1.6'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://static.63.89.13.49.clients.your-server.de'   # self-hosted (Hetzner / dreihoch-ops)
 SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNDA2NDM4LCJleHAiOjE5NTAwODY0Mzh9.Muyz13I6F-ZRs3Waez3lGAEqtBjM41QZhumgr5A-CSY'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
@@ -351,9 +351,37 @@ def collect(raw):
     return stats, tex_cache
 
 # Meshes nach Material zusammenfuehren (statt 1 Node pro Quell-Mesh) + Polygon-Budget.
+#  Harte Obergrenze (Faces) GEGEN HAENGER: auch bei "Unlimited" wird nie mehr
+#  als das in einem Rutsch gebaut. Grosse Modelle (z.B. oro padel) sonst -> Freeze.
+HARD_FACE_CAP = 1500000
+
 def merge_and_extract(raw):
-    buckets = {}   # key -> [Mesh, meta]
+    # Zielbudget bestimmen (Unlimited=0 -> Sicherheitskappe; Budget wird ebenfalls gekappt)
+    budget = OPT['poly_budget']
+    eff = budget if (budget and budget > 0) else HARD_FACE_CAP
+    if eff > HARD_FACE_CAP: eff = HARD_FACE_CAP
+    total = 0
     for r in raw:
+        try: total += r['mesh'].Faces.Count
+        except: pass
+    # Reduktionsfaktor PRO OBJEKT (kleine Meshes reduzieren = schnell; Riesen-Reduce vermeiden)
+    f = (float(eff) / float(total)) if (total > eff and total > 0) else 1.0
+    if f < 1.0:
+        emit('Reducing polygons: %d -> ~%d (prevents freeze) ...' % (total, eff))
+
+    buckets = {}   # key -> [Mesh, meta]
+    n = len(raw); i = 0
+    for r in raw:
+        i += 1
+        if i % 2000 == 0: emit('Merging by material ... %d/%d' % (i, n))
+        m = r['mesh']
+        if f < 1.0:
+            try:
+                fc = m.Faces.Count
+                if fc > 200:
+                    tgt = max(50, int(fc * f))
+                    if fc > tgt: m.Reduce(tgt, True, 10, False)
+            except: pass
         c = r['color']
         mt = r.get('metal')
         if r['tex']:
@@ -364,22 +392,13 @@ def merge_and_extract(raw):
         else:
             key = ('c', r['grp'], r['gmat'], (int(round(c[0]*20)), int(round(c[1]*20)), int(round(c[2]*20))))
         if key not in buckets: buckets[key] = [Rhino.Geometry.Mesh(), r]
-        buckets[key][0].Append(r['mesh'])
-    budget = OPT['poly_budget']
-    total = sum(b[0].Faces.Count for b in buckets.values())
-    if budget and budget > 0 and total > budget:
-        f = float(budget) / float(total)
-        log('Polygon-Reduktion: %d -> ~%d' % (total, budget))
-        for b in buckets.values():
-            try:
-                tgt = max(50, int(b[0].Faces.Count * f))
-                if b[0].Faces.Count > tgt: b[0].Reduce(tgt, True, 10, False)
-            except: pass
+        buckets[key][0].Append(m)
+
     rends = []
     for (mesh, meta) in buckets.values():
         rr = mesh_to_renderable(mesh, meta)
         if rr: rends.append(rr)
-    log('Zusammengefuehrt: %d Quell-Meshes -> %d Material-Gruppen' % (len(raw), len(rends)))
+    log('Zusammengefuehrt: %d Quell-Meshes -> %d Material-Gruppen (cap %d Faces)' % (len(raw), len(rends), eff))
     return rends
 
 # ---------------------------------------------------------------------------
