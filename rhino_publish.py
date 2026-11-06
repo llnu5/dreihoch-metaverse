@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.7'   # bump on every change so the user can see which build is running
+PLUGIN_VERSION = '1.8'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://static.63.89.13.49.clients.your-server.de'   # self-hosted (Hetzner / dreihoch-ops)
 SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNDA2NDM4LCJleHAiOjE5NTAwODY0Mzh9.Muyz13I6F-ZRs3Waez3lGAEqtBjM41QZhumgr5A-CSY'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
@@ -369,23 +369,18 @@ def collect(raw):
     return stats, tex_cache
 
 # Meshes nach Material zusammenfuehren (statt 1 Node pro Quell-Mesh) + Polygon-Budget.
-#  Harte Obergrenze (Faces) GEGEN HAENGER: auch bei "Unlimited" wird nie mehr
-#  als das in einem Rutsch gebaut. Grosse Modelle (z.B. oro padel) sonst -> Freeze.
-HARD_FACE_CAP = 1500000
-
 def merge_and_extract(raw):
-    # Zielbudget bestimmen (Unlimited=0 -> Sicherheitskappe; Budget wird ebenfalls gekappt)
+    # "Unlimited" (budget 0) = WIRKLICH keine Reduktion (volle Aufloesung).
+    # Numerisches Budget = auf diese Face-Zahl reduzieren.
     budget = OPT['poly_budget']
-    eff = budget if (budget and budget > 0) else HARD_FACE_CAP
-    if eff > HARD_FACE_CAP: eff = HARD_FACE_CAP
     total = 0
     for r in raw:
         try: total += r['mesh'].Faces.Count
         except: pass
     # Reduktionsfaktor PRO OBJEKT (kleine Meshes reduzieren = schnell; Riesen-Reduce vermeiden)
-    f = (float(eff) / float(total)) if (total > eff and total > 0) else 1.0
+    f = (float(budget) / float(total)) if (budget and budget > 0 and total > budget) else 1.0
     if f < 1.0:
-        emit('Reducing polygons: %d -> ~%d (prevents freeze) ...' % (total, eff))
+        emit('Reducing polygons: %d -> ~%d ...' % (total, budget))
 
     buckets = {}   # key -> [Mesh, meta]
     n = len(raw); i = 0
