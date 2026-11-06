@@ -65,6 +65,7 @@ const subEl = loaderEl ? loaderEl.querySelector('.sub') : null;
 
 let scanGroup = null, cadGroup = null;   // Rhino: Layer "3D_Scan" vs. restliche Geometrie (CAD)
 let scanViewMode = null;                 // null = kein Scan-Switch; sonst 'cad' | 'scan' (für Annotations-Filter)
+let scanStartMode = 'cad';               // Start-Ansicht: 'scan' bei reinen Scan-Projekten (sonst bliebe es leer)
 
 function setProgress(loaded, total) {
   if (total) { const p = Math.min(100, Math.round((loaded / total) * 100)); barfill.style.width = p + '%'; pctEl.innerHTML = p + '&nbsp;%'; }
@@ -146,7 +147,8 @@ function finishLoad(root) {
   } catch (e) {}
   applyLens(40);                 // Start-Brennweite immer 40 mm
   setupLensControl();
-  camera.near = 0.4;                                 // Near-Clipping fix 40 cm (nicht mehr modellabhängig ~1-2 m)
+  // Near-Clipping an Modellgröße koppeln (max 40 cm) -> kleine Modelle/Scans werden nicht weggeclippt
+  camera.near = Math.min(0.4, Math.max(0.005, modelRadius * 0.01));
   camera.far = modelRadius * 60;
   camera.updateProjectionMatrix();
   resetView();
@@ -242,7 +244,10 @@ function processRhinoGLB(root, has2d) {
     root.add(scanGroup, cadGroup);
     sc.forEach((o) => scanGroup.attach(o));
     cd.forEach((o) => cadGroup.attach(o));
-    cadGroup.visible = true; scanGroup.visible = false;
+    // Reines Scan-Projekt (keine CAD-Geometrie) -> Scan direkt zeigen, sonst bleibt der Viewer leer
+    scanStartMode = (cd.length === 0) ? 'scan' : 'cad';
+    const showScan = scanStartMode === 'scan';
+    cadGroup.visible = !showScan; scanGroup.visible = showScan;
   }
   root.rotateX(-Math.PI / 2);          // einmalige Drehung (Rhino Z-up -> Y-up), NACH dem Umhängen
   finishLoad(root);
@@ -382,14 +387,15 @@ function setupLensControl() {
 }
 
 function setupScanSwitch() {
-  scanViewMode = 'cad';   // ein Scan-Switch existiert -> Annotationen werden nach Modus gefiltert
+  const startScan = scanStartMode === 'scan';
+  scanViewMode = startScan ? 'scan' : 'cad';   // Scan-Switch existiert -> Annotationen nach Modus gefiltert
   const topbar = document.getElementById('topbar');
   const sep = document.createElement('div'); sep.className = 'sep';
   const seg = document.createElement('div'); seg.className = 'seg'; seg.id = 'scan-switch';
   const ICN_CAD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"/><path d="M3.7 7.3l8.3 4.7 8.3-4.7M12 12v9.5"/></svg>`;
   const ICN_SCAN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l1.4-2h7.2L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.4"/></svg>`;
-  seg.innerHTML = `<button class="btn active" data-v="cad" data-tip="3D Model (CAD)" aria-label="CAD">${ICN_CAD}<span>CAD</span></button>
-                   <button class="btn" data-v="scan" data-tip="3D Scan" aria-label="Scan">${ICN_SCAN}<span>Scan</span></button>`;
+  seg.innerHTML = `<button class="btn${startScan ? '' : ' active'}" data-v="cad" data-tip="3D Model (CAD)" aria-label="CAD">${ICN_CAD}<span>CAD</span></button>
+                   <button class="btn${startScan ? ' active' : ''}" data-v="scan" data-tip="3D Scan" aria-label="Scan">${ICN_SCAN}<span>Scan</span></button>`;
   topbar.append(sep, seg);
   seg.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
     const scan = b.dataset.v === 'scan';
@@ -399,8 +405,8 @@ function setupScanSwitch() {
     // Scan-Modus: flach/unlit auf weiß, kein Post-Processing. CAD: normal gerendert.
     window.dispatchEvent(new CustomEvent('scan-mode', { detail: { scan, mode: scanViewMode } }));
   }));
-  // Initial: Modus bekanntgeben (für Annotations-Filter)
-  window.dispatchEvent(new CustomEvent('scan-mode', { detail: { scan: false, mode: 'cad' } }));
+  // Initial: Start-Modus bekanntgeben (reine Scan-Projekte starten im Scan-Modus, sonst leer)
+  window.dispatchEvent(new CustomEvent('scan-mode', { detail: { scan: startScan, mode: scanViewMode } }));
 }
 
 // --- Entscheiden, was geladen wird ---
