@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.6'   # bump on every change so the user can see which build is running
+PLUGIN_VERSION = '1.7'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://static.63.89.13.49.clients.your-server.de'   # self-hosted (Hetzner / dreihoch-ops)
 SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNDA2NDM4LCJleHAiOjE5NTAwODY0Mzh9.Muyz13I6F-ZRs3Waez3lGAEqtBjM41QZhumgr5A-CSY'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
@@ -48,7 +48,7 @@ JPEG_QUALITY = 85
 
 # Laufzeit-Einstellungen (per Panel gesetzt)
 OPT = {'max_tex': 1024, 'poly_budget': 1000000, 'selected_only': False, 'layers': None,
-       'textures': True, 'materials': True}
+       'textures': True, 'materials': True, 'color_source': 'material'}  # color_source: 'material'|'object'|'vertex'
 DEFAULT_COL = [0.82, 0.82, 0.82]
 
 def log(m): Rhino.RhinoApp.WriteLine('[publish] ' + m)
@@ -135,6 +135,14 @@ def material_color(obj):
         try: c = mat.DiffuseColor; return [c.R/255.0, c.G/255.0, c.B/255.0]
         except: pass
     return [0.8, 0.8, 0.8]
+
+def object_draw_color(obj):
+    """Rhino-Anzeigefarbe des Objekts (loest ByLayer/ByParent/ByObject auf)."""
+    try:
+        c = obj.Attributes.DrawColor(sc.doc)
+        return [c.R/255.0, c.G/255.0, c.B/255.0]
+    except:
+        return material_color(obj)
 
 def material_metal(obj):
     """Metallisches Material erkennen -> (metalness, roughness, [r,g,b]) oder None.
@@ -277,9 +285,10 @@ def collect(raw):
         glass = is_glass_layer(lname); scan = is_scan_layer(lname)
         if not glass and not scan and is_hide_layer(lname):
             stats['hidden'] += 1; return
-        # Textur zuerst (entscheidet, ob Render-Mesh fuer UVs noetig ist)
+        cs = OPT.get('color_source', 'material')   # 'material' | 'object' | 'vertex'
+        # Texturen nur im Material-Modus (entscheidet, ob Render-Mesh fuer UVs noetig ist)
         tex_key = None; tex_obj = None
-        if not glass and OPT.get('textures', True):
+        if cs == 'material' and not glass and OPT.get('textures', True):
             tex_obj = material_texture(obj)
             if tex_obj and tex_obj.FileName:
                 base = os.path.basename(tex_obj.FileName).lower()
@@ -287,14 +296,22 @@ def collect(raw):
                 if tex_cache.get(base): tex_key = base
         meshes = meshes_of_object(obj, tex_key is not None)
         if not meshes: return
-        col = material_color(obj) if OPT.get('materials', True) else DEFAULT_COL
-        metal = None
-        if OPT.get('materials', True) and not glass and not tex_key:
-            metal = material_metal(obj)   # (metalness, roughness, [r,g,b]) oder None
+        # Farbquelle bestimmen
+        col = DEFAULT_COL; metal = None; vcol = False
+        if glass:
+            pass                                   # Glas ueber gmat
+        elif cs == 'vertex':
+            vcol = True                            # Vertex-Farben (COLOR_0) -> weisses Material
+        elif cs == 'object':
+            col = object_draw_color(obj)           # Rhino-Anzeigefarbe (ByLayer/ByObject aufgeloest)
+        else:                                      # 'material'
+            col = material_color(obj) if OPT.get('materials', True) else DEFAULT_COL
+            if OPT.get('materials', True) and not tex_key:
+                metal = material_metal(obj)        # (metalness, roughness, [r,g,b]) oder None
         for m in meshes:
             if tex_key and tex_obj is not None: bake_uvw(m, tex_obj)   # Repeat/Offset in UVs backen
             if xform and xform != Rhino.Geometry.Transform.Identity: m.Transform(xform)
-            raw.append({'mesh':m,'grp':'scan' if scan else 'cad','gmat':'glass' if glass else '','tex':tex_key,'color':col,'metal':metal})
+            raw.append({'mesh':m,'grp':'scan' if scan else 'cad','gmat':'glass' if glass else '','tex':tex_key,'color':col,'metal':metal,'vcol':vcol})
             stats['meshes'] += 1
             if scan: stats['scan'] += 1
             if glass: stats['glass'] += 1
@@ -322,7 +339,8 @@ def collect(raw):
     for obj in objlist:
         _n += 1
         if _n % 3000 == 0: emit('Collecting geometry ... %d objects, %d meshes' % (_n, stats['meshes']))
-        if not obj.IsValid: continue
+        # obj.IsValid NICHT als Ausschluss: 3D-Scan-Meshes sind oft "invalid" (offene Kanten),
+        # aber einwandfrei renderbar. Ungueltige Breps fallen beim Vernetzen leise raus.
         if obj.Geometry is None: continue
         if sel_ids is not None and str(obj.Id) not in sel_ids: continue
         lname = layer_name_of(obj)
@@ -384,7 +402,9 @@ def merge_and_extract(raw):
             except: pass
         c = r['color']
         mt = r.get('metal')
-        if r['tex']:
+        if r.get('vcol'):
+            key = ('v', r['grp'], r['gmat'])          # Vertex-Farben: alle zusammen (COLOR_0 traegt die Farbe)
+        elif r['tex']:
             key = ('t', r['grp'], r['gmat'], r['tex'])
         elif mt:
             key = ('m', r['grp'], int(round(mt[0]*10)), int(round(mt[1]*10)),
@@ -412,6 +432,8 @@ def mesh_to_renderable(m, meta):
         if m.Normals.Count != nv: m.Normals.ComputeNormals()
         pos = array.array('f'); nor = array.array('f'); uv = array.array('f')
         has_uv = (m.TextureCoordinates.Count == nv) and (meta['tex'] is not None)
+        want_vcol = bool(meta.get('vcol')) and (m.VertexColors.Count == nv)
+        col = array.array('f') if want_vcol else None
         for i in range(nv):
             v = m.Vertices[i]; pos.append(float(v.X)); pos.append(float(v.Y)); pos.append(float(v.Z))
             if m.Normals.Count == nv:
@@ -420,12 +442,16 @@ def mesh_to_renderable(m, meta):
             if has_uv:
                 t = m.TextureCoordinates[i]; uv.append(float(t.X)); uv.append(1.0 - float(t.Y))
             else: uv.append(0.0); uv.append(0.0)
+            if want_vcol:
+                vc = m.VertexColors[i]
+                col.append(vc.R/255.0); col.append(vc.G/255.0); col.append(vc.B/255.0); col.append(1.0)
         idx = array.array('I')
         for f in range(m.Faces.Count):
             face = m.Faces[f]
             idx.append(face.A); idx.append(face.B); idx.append(face.C)
             if face.IsQuad: idx.append(face.A); idx.append(face.C); idx.append(face.D)
-        r = dict(meta); r.update({'pos':pos,'nor':nor,'uv':uv,'idx':idx,'has_uv':has_uv,'nv':nv})
+        r = dict(meta); r.update({'pos':pos,'nor':nor,'uv':uv,'idx':idx,'has_uv':has_uv,'nv':nv,
+                                  'col':col,'has_vcol':want_vcol})
         return r
     except Exception as e:
         log('mesh_to_renderable: %s' % e); return None
@@ -459,6 +485,12 @@ def build_glb(renderables, tex_cache):
 
     mat_index={}
     def get_material(r):
+        if r.get('has_vcol'):
+            # Vertex-Farben: neutrales weisses Material, COLOR_0 faerbt die Oberflaeche
+            k='vcol'
+            if k not in mat_index:
+                materials.append({'name':'vcol','pbrMetallicRoughness':{'baseColorFactor':[1,1,1,1],'metallicFactor':0.0,'roughnessFactor':0.95},'doubleSided':True}); mat_index[k]=len(materials)-1
+            return mat_index[k]
         if r['gmat']=='glass':
             k='glass'
             if k not in mat_index:
@@ -495,6 +527,7 @@ def build_glb(renderables, tex_cache):
         a_nor=add_accessor(r['nor'],CF,'VEC3',nv,target=AB)
         attrs={'POSITION':a_pos,'NORMAL':a_nor}
         if r['has_uv']: attrs['TEXCOORD_0']=add_accessor(r['uv'],CF,'VEC2',nv,target=AB)
+        if r.get('has_vcol') and r.get('col'): attrs['COLOR_0']=add_accessor(r['col'],CF,'VEC4',nv,target=AB)
         a_idx=add_accessor(r['idx'],CU,'SCALAR',len(r['idx']),target=EB)
         meshes.append({'primitives':[{'attributes':attrs,'indices':a_idx,'material':get_material(r),'mode':4}]})
         nodes.append({'mesh':len(meshes)-1,'extras':{'grp':r['grp'],'gmat':r['gmat']}})
@@ -606,19 +639,21 @@ def link_get():
         pid = d.Strings.GetValue('pr85_project_id'); name = d.Strings.GetValue('pr85_project_name')
         if pid: return {'id': pid, 'name': name or '?',
                         'budget': d.Strings.GetValue('pr85_budget'), 'tex': d.Strings.GetValue('pr85_tex'),
-                        'layers': d.Strings.GetValue('pr85_layers')}
+                        'layers': d.Strings.GetValue('pr85_layers'),
+                        'cs': d.Strings.GetValue('pr85_cs') or 'material'}
     except: pass
     return None
-def link_set(pid, name, budget, tex, layers_csv):
+def link_set(pid, name, budget, tex, layers_csv, cs='material'):
     d = sc.doc
     try:
         d.Strings.SetString('pr85_project_id', pid); d.Strings.SetString('pr85_project_name', name)
         d.Strings.SetString('pr85_budget', str(budget)); d.Strings.SetString('pr85_tex', str(tex))
         d.Strings.SetString('pr85_layers', layers_csv or '')
+        d.Strings.SetString('pr85_cs', cs or 'material')
     except Exception as e: log('link_set: %s' % e)
 def link_clear():
     d = sc.doc
-    for k in ['pr85_project_id', 'pr85_project_name', 'pr85_budget', 'pr85_tex', 'pr85_layers']:
+    for k in ['pr85_project_id', 'pr85_project_name', 'pr85_budget', 'pr85_tex', 'pr85_layers', 'pr85_cs']:
         try: d.Strings.Delete(k)
         except: pass
 
@@ -641,12 +676,13 @@ def doc_scan_info():
 # ---------------------------------------------------------------------------
 #  Export-Kern (keine Dialoge) -> von Menue UND Panel genutzt
 # ---------------------------------------------------------------------------
-def export_and_upload(name, pid, version, budget, texmax, use_tex, use_mat, existing_settings, status=None):
+def export_and_upload(name, pid, version, budget, texmax, use_tex, use_mat, existing_settings, status=None, color_source='material'):
     def st(m):
         emit(m)
     doc = sc.doc
     OPT['layers'] = None; OPT['poly_budget'] = budget; OPT['max_tex'] = texmax; OPT['selected_only'] = False
     OPT['textures'] = bool(use_tex); OPT['materials'] = bool(use_mat)
+    OPT['color_source'] = color_source if color_source in ('material', 'object', 'vertex') else 'material'
     _PROGRESS[0] = status
     try:
         cam = capture_camera()
@@ -695,10 +731,11 @@ def quick_update():
             if isinstance(p.get('settings'), dict): existing = p['settings']
             break
     budget, tex = _link_budget_tex(lk)
-    Rhino.RhinoApp.WriteLine('[publish] 1-click update: "%s" -> v%d' % (lk['name'], ver))
-    ok, msg, mb, info = export_and_upload(lk['name'], lk['id'], ver, budget, tex, True, True, existing, None)
+    cs = lk.get('cs', 'material')
+    Rhino.RhinoApp.WriteLine('[publish] 1-click update: "%s" -> v%d (color: %s)' % (lk['name'], ver, cs))
+    ok, msg, mb, info = export_and_upload(lk['name'], lk['id'], ver, budget, tex, True, True, existing, None, color_source=cs)
     if ok:
-        link_set(lk['id'], lk['name'], budget, tex, lk.get('layers', ''))
+        link_set(lk['id'], lk['name'], budget, tex, lk.get('layers', ''), cs)
         if rs.MessageBox('Updated: "%s" v%d (%.1f MB)\n\n%s\n\nOpen in browser?' % (lk['name'], ver, mb, msg), 4, 'Publish') == 6: open_url(msg)
     else:
         rs.MessageBox('Error: ' + msg, 0, 'Publish')
@@ -843,6 +880,13 @@ def show_panel():
     if link0 and link0.get('tex') in TEXSIZES: tex_dd.SelectedIndex = TEXSIZES.index(link0['tex'])
     cb_tex = F.CheckBox(); cb_tex.Text = 'Upload textures'; cb_tex.Checked = True
     cb_mat = F.CheckBox(); cb_mat.Text = 'Upload material colors'; cb_mat.Checked = True
+    # Farb-Quelle: Material/Texturen | Rhino-Objektfarbe | Vertex-Farben (3D-Scans)
+    CS_LABELS = ['Material / textures', 'Object color', 'Vertex colors']
+    CS_VALUES = ['material', 'object', 'vertex']
+    cs_dd = F.DropDown()
+    for it in CS_LABELS: cs_dd.Items.Add(it)
+    cs_dd.SelectedIndex = 0
+    if link0 and link0.get('cs') in CS_VALUES: cs_dd.SelectedIndex = CS_VALUES.index(link0['cs'])
 
     # ---- STATUS / PROGRESS ----
     progress = F.ProgressBar(); progress.Indeterminate = True; progress.Visible = False
@@ -857,6 +901,7 @@ def show_panel():
     def cur_budget():
         v = BUDGETS[budget_dd.SelectedIndex]; return 0 if v == 'Unlimited' else int(v)
     def cur_tex(): return int(TEXSIZES[tex_dd.SelectedIndex])
+    def cur_cs(): return CS_VALUES[cs_dd.SelectedIndex]
 
     def refresh_list():
         S['projects'] = fetch_projects()
@@ -878,11 +923,11 @@ def show_panel():
     def publish_core(name, pid, version):
         set_busy(True); status('Starting ...')
         try:
-            ok, msg, mb, info = export_and_upload(name, pid, version, cur_budget(), cur_tex(), cb_tex.Checked, cb_mat.Checked, existing_settings_for(pid), status)
+            ok, msg, mb, info = export_and_upload(name, pid, version, cur_budget(), cur_tex(), cb_tex.Checked, cb_mat.Checked, existing_settings_for(pid), status, color_source=cur_cs())
         finally:
             set_busy(False)
         if ok:
-            link_set(pid, name, BUDGETS[budget_dd.SelectedIndex], TEXSIZES[tex_dd.SelectedIndex], '')
+            link_set(pid, name, BUDGETS[budget_dd.SelectedIndex], TEXSIZES[tex_dd.SelectedIndex], '', cur_cs())
             refresh_list(); status_lbl.Text = u'✓ Done - "%s" v%d  (%.1f MB)' % (name, version, mb)
             if rs.MessageBox('Published (%.1f MB)!\n\n%s\n\nOpen in browser?' % (mb, msg), 4, 'Publish') == 6: open_url(msg)
             rs.ClipboardText(msg)
@@ -916,7 +961,7 @@ def show_panel():
     def on_link(s, e):
         p = sel_proj()
         if p:
-            link_set(p['id'], p['name'], BUDGETS[budget_dd.SelectedIndex], TEXSIZES[tex_dd.SelectedIndex], '')
+            link_set(p['id'], p['name'], BUDGETS[budget_dd.SelectedIndex], TEXSIZES[tex_dd.SelectedIndex], '', cur_cs())
             upd_file_box(); status_lbl.Text = u'Linked to "%s"' % p['name']
     def on_refresh(s, e): refresh_list(); status_lbl.Text = 'List refreshed.'
     def on_admin(s, e): open_url(ADMIN_URL)
@@ -942,6 +987,7 @@ def show_panel():
     g1.AddRow(scan_lbl)
 
     g2 = F.DynamicLayout(); g2.DefaultSpacing = D.Size(8, 6)
+    g2.AddRow(L('Color source'), cs_dd)
     g2.AddRow(L('Polygon budget'), budget_dd)
     g2.AddRow(L('Texture size (px)'), tex_dd)
     g2.AddRow(cb_tex)
