@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.9'   # bump on every change so the user can see which build is running
+PLUGIN_VERSION = '2.0'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://static.63.89.13.49.clients.your-server.de'   # self-hosted (Hetzner / dreihoch-ops)
 SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNDA2NDM4LCJleHAiOjE5NTAwODY0Mzh9.Muyz13I6F-ZRs3Waez3lGAEqtBjM41QZhumgr5A-CSY'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
@@ -143,6 +143,18 @@ def object_draw_color(obj):
         return [c.R/255.0, c.G/255.0, c.B/255.0]
     except:
         return material_color(obj)
+
+def display_color(col):
+    """Rhino-Trick: reines/nahezu schwarzes Objekt (meist die Standard-Layerfarbe
+    0,0,0) wird fuer die schattierte Flaeche als helles Grau angezeigt, damit die
+    Geometrie sichtbar bleibt statt als schwarzer Klumpen zu erscheinen. Edges/Linien
+    bleiben in Rhino schwarz - der Viewer zeichnet ohnehin nur Flaechen."""
+    try:
+        if max(col[0], col[1], col[2]) < 0.04:
+            return [DEFAULT_COL[0], DEFAULT_COL[1], DEFAULT_COL[2]]
+    except:
+        pass
+    return col
 
 def material_metal(obj):
     """Metallisches Material erkennen -> (metalness, roughness, [r,g,b]) oder None.
@@ -303,11 +315,13 @@ def collect(raw):
         elif cs == 'vertex':
             vcol = True                            # Vertex-Farben (COLOR_0) -> weisses Material
         elif cs == 'object':
-            col = object_draw_color(obj)           # Rhino-Anzeigefarbe (ByLayer/ByObject aufgeloest)
+            col = display_color(object_draw_color(obj))   # Rhino-Anzeigefarbe (ByLayer/ByObject), Schwarz -> Hellgrau
         else:                                      # 'material'
             col = material_color(obj) if OPT.get('materials', True) else DEFAULT_COL
             if OPT.get('materials', True) and not tex_key:
                 metal = material_metal(obj)        # (metalness, roughness, [r,g,b]) oder None
+            if metal is None:
+                col = display_color(col)           # schwarzes Diffus-Material ebenfalls aufhellen
         for m in meshes:
             if tex_key and tex_obj is not None: bake_uvw(m, tex_obj)   # Repeat/Offset in UVs backen
             if xform and xform != Rhino.Geometry.Transform.Identity: m.Transform(xform)
