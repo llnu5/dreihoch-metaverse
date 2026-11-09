@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.8'   # bump on every change so the user can see which build is running
+PLUGIN_VERSION = '1.9'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://static.63.89.13.49.clients.your-server.de'   # self-hosted (Hetzner / dreihoch-ops)
 SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNDA2NDM4LCJleHAiOjE5NTAwODY0Mzh9.Muyz13I6F-ZRs3Waez3lGAEqtBjM41QZhumgr5A-CSY'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
@@ -413,7 +413,7 @@ def merge_and_extract(raw):
     for (mesh, meta) in buckets.values():
         rr = mesh_to_renderable(mesh, meta)
         if rr: rends.append(rr)
-    log('Zusammengefuehrt: %d Quell-Meshes -> %d Material-Gruppen (cap %d Faces)' % (len(raw), len(rends), eff))
+    log('Zusammengefuehrt: %d Quell-Meshes -> %d Material-Gruppen (%d Faces)' % (len(raw), len(rends), total))
     return rends
 
 # ---------------------------------------------------------------------------
